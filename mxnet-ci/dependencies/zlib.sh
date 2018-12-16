@@ -27,11 +27,7 @@ cd zlib
 echo "Building zlib ${ZLIB_VERSION} ..."
 
 git fetch
-if [[ "${PLATFORM}" == "linux" ]]; then
-    git checkout ${ZLIB_VERSION}
-elif [[ "${PLATFORM}" == "darwin" ]]; then
-    git checkout ${ZLIB_VERSION}-Darwin-x86_64
-fi
+git checkout ${ZLIB_VERSION}
 
 rm -rf build
 mkdir -p build

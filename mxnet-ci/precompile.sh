@@ -2,14 +2,18 @@
 
 set -e
 
-apt-get update
-apt-get install -y --no-install-recommends \
-    nasm \
-    libtool \
-    automake
+PLATFORM=$(uname | tr '[:upper:]' '[:lower:]')
 
-if [[ ! "${PLATFORM}" == "darwin" ]]; then
+if [[ "${PLATFORM}" == "linux" ]]; then
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        nasm \
+        libtool \
+        automake
+
     dependencies/openblas.sh
+elif [[ "${PLATFORM}" == "darwin" ]]; then
+    brew install automake pkg-config nasm cmake
 fi
 dependencies/zlib.sh
 dependencies/libjpeg-turbo.sh

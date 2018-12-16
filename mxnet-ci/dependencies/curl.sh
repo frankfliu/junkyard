@@ -36,6 +36,9 @@ if [[ "${PLATFORM}" == "linux" ]]; then
     export PKG_CONFIG_PATH=${LIBCURL_INSTALL_DIR}/lib/pkgconfig
 elif [[ "${PLATFORM}" == "darwin" ]]; then
     CONFIG_FLAG="--with-darwinssl"
+
+    # https://github.com/dhlab-basel/Sipi/issues/236
+    brew uninstall --ignore-dependencies libidn2
 fi
 ./buildconf
 ./configure $CONFIG_FLAG \

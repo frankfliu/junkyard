@@ -18,13 +18,15 @@ export BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 S3_PREFIX=https://s3.us-east-2.amazonaws.com/mxnet-public/precompiled_libraries/${PLATFORM}-${ARCH}
 
-MXNET_DIR=$(pwd)
+export MXNET_DIR=`pwd`
 export DEPS_PATH=${MXNET_DIR}/build/deps
 
 if [[ ! -d "${DEPS_PATH}" ]]; then
     mkdir -p ${DEPS_PATH}
     cd ${DEPS_PATH}
-    curl ${S3_PREFIX}/OpenBLAS-${OPENBLAS_VERSION}.tar.gz | tar xvz
+    if [[ $PLATFORM == 'linux' ]]; then
+        curl ${S3_PREFIX}/OpenBLAS-${OPENBLAS_VERSION}.tar.gz | tar xvz
+    fi
     curl ${S3_PREFIX}/zlib-${ZLIB_VERSION}.tar.gz | tar xvz
     curl ${S3_PREFIX}/libjpeg-turbo-${TURBO_JPEG_VERSION}.tar.gz | tar xvz
     curl ${S3_PREFIX}/libpng-${PNG_VERSION}.tar.gz | tar xvz

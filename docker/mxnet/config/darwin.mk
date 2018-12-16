@@ -40,7 +40,7 @@ USE_PROFILER = 1
 USE_SIGNAL_HANDLER = 0
 
 # the additional link flags you want to add
-ADD_LDFLAGS += -L$(DEPS_PATH)/lib -lpng -ltiff -lz -framework CoreFoundation -framework Security  -Wl,-exported_symbols_list,$(BASEDIR)/config/libmxnet.sym,-install_name,@rpath/libmxnet.so,-dead_strip
+ADD_LDFLAGS += -L$(DEPS_PATH)/lib -lpng -ltiff -lz -framework CoreFoundation -framework Security  -Wl,-exported_symbols_list,$(BASEDIR)/config/libmxnet.sym,-dead_strip
 
 # the additional compile flags you want to add
 ADD_CFLAGS += -I$(DEPS_PATH)/include -ffunction-sections -fdata-sections
