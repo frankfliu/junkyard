@@ -1,0 +1,13 @@
+{
+    global:
+        NN*;
+        MX*;
+        _NN*;
+        _MX*;
+        nn*;
+        mx*;
+        _nn*;
+        _mx*;
+        Java_org_apache_mxnet_*;
+    local: *;
+};
