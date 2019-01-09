@@ -37,7 +37,7 @@ DEBUG = 0
 USE_PROFILER = 1
 
 # whether to turn on signal handler (e.g. segfault logger)
-USE_SIGNAL_HANDLER = 0
+USE_SIGNAL_HANDLER = 1
 
 # the additional link flags you want to add
 ADD_LDFLAGS += -L$(DEPS_PATH)/lib -lpng -ltiff -lz -framework CoreFoundation -framework Security  -Wl,-exported_symbols_list,$(BASEDIR)/config/libmxnet.sym,-dead_strip
@@ -81,7 +81,7 @@ USE_NVRTC = 0
 USE_OPENMP = 0
 USE_OPERATOR_TUNING = 1
 USE_LIBJPEG_TURBO = 1
-
+USE_LIBJPEG_TURBO_PATH = $(DEPS_PATH)
 
 # MKL ML Library for Intel CPU/Xeon Phi
 # Please refer to MKL_README.md for details
