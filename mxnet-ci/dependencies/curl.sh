@@ -30,20 +30,13 @@ echo "Building curl ${LIBCURL_VERSION} ..."
 git fetch
 git checkout curl-${LIBCURL_VERSION}
 
-if [[ "${PLATFORM}" == "linux" ]]; then
-    CONFIG_FLAG=""
-    OLD_PKG_CONFIG_PATH=${PKG_CONFIG_PATH}
-    export PKG_CONFIG_PATH=${LIBCURL_INSTALL_DIR}/lib/pkgconfig
-elif [[ "${PLATFORM}" == "darwin" ]]; then
-    CONFIG_FLAG="--with-darwinssl"
-
-    # https://github.com/dhlab-basel/Sipi/issues/236
-    brew uninstall --ignore-dependencies libidn2
+if [[ "${PLATFORM}" == "darwin" ]]; then
+    CONFIG_FLAG="--with-darwinssl --without-libidn2"
 fi
 ./buildconf
 ./configure $CONFIG_FLAG \
-    --with-zlib \
-    --with-nghttps2 \
+    --with-zlib=${WORK_DIR}/build/zlib-${ZLIB_VERSION} \
+    --without-nghttp2 \
     --without-zsh-functions-dir \
     --without-librtmp \
     --without-libssh2 \
@@ -72,10 +65,6 @@ fi
 
 make -j ${NUM_PROC}
 make install
-
-if [[ "${PLATFORM}" == "linux" ]]; then
-    export PKG_CONFIG_PATH=${OLD_PKG_CONFIG_PATH}
-fi
 
 tar cvfz ${LIBCURL_INSTALL_DIR}.tar.gz --exclude="./bin" -C ${LIBCURL_INSTALL_DIR} .
 
