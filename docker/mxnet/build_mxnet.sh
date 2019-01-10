@@ -48,24 +48,15 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${DEPS_PATH}/lib
 
 cp -f ${BASEDIR}/config/${PLATFORM}${FLAVOR}${MKL}.mk config.mk
 
-make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH} DMLCCORE
-make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH} ${MXNET_DIR}/3rdparty/tvm/nnvm/lib/libnnvm.a
-make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH} PSLITE
+make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH} ${MAKE_OPTS} DMLCCORE
+make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH} ${MAKE_OPTS} ${MXNET_DIR}/3rdparty/tvm/nnvm/lib/libnnvm.a
+make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH} ${MAKE_OPTS} PSLITE
 
 if [[ "$1" == "mkl" ]]; then
-    if [[ $PLATFORM == 'linux' ]]; then
-        IOMP_LIBFILE='libiomp5.so'
-        MKLML_LIBFILE='libmklml_intel.so'
-        MKLDNN_LIBFILE='libmkldnn.so.0'
-    else
-        IOMP_LIBFILE='libiomp5.dylib'
-        MKLML_LIBFILE='libmklml.dylib'
-        MKLDNN_LIBFILE='libmkldnn.0.dylib'
-    fi
-    make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH} mkldnn
+    make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH} ${MAKE_OPTS} mkldnn
 fi
 
-make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH}
+make -j ${NUM_PROC} DEPS_PATH=${DEPS_PATH} ${MAKE_OPTS}
 
 if [[ $PLATFORM == 'linux' ]]; then
     cp -f /usr/lib/x86_64-linux-gnu/libgfortran.so.3 lib/
