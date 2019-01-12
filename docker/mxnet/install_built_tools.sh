@@ -8,9 +8,8 @@ apt-get install -y --no-install-recommends \
 		fakeroot \
 		ca-certificates \
 		dpkg-dev \
-		g++-4.8 \
-		gcc-4.8 \
-		gfortran-4.8 \
+		g++ \
+		gfortran \
 		pkg-config \
 		cmake \
 		curl \
@@ -19,14 +18,20 @@ apt-get install -y --no-install-recommends \
 		git \
 		unzip \
 		python3-dev
+
+# apt-get install -y --no-install-recommends \
+# 		g++-4.8 \
+# 		gcc-4.8 \
+# 		gfortran-4.8
+# 
+# update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 50 --slave /usr/bin/g++ g++ /usr/bin/g++-4.8
+# update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-4.8 50
+
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 cd /tmp
 curl -O https://bootstrap.pypa.io/get-pip.py
 python3 get-pip.py
 rm get-pip.py
-
-update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 50 --slave /usr/bin/g++ g++ /usr/bin/g++-4.8
-update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-4.8 50
 
 mkdir -p /usr/local/mxnet/config
