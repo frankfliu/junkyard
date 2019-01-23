@@ -16,7 +16,7 @@ export CC="gcc -fPIC"
 export CXX="g++ -fPIC"
 export FC="gfortran"
 
-export OPENBLAS_VERSION=0.3.2
+export OPENBLAS_VERSION=0.3.5
 export ZLIB_VERSION=1.2.6
 export TURBO_JPEG_VERSION=1.5.90
 export PNG_VERSION=1.6.34
