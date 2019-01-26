@@ -1,0 +1,22 @@
+{
+  "specificationVersion": "1.0",
+  "implementationVersion": "1.0",
+  "description": "ResNet_DUC_HDC",
+  "modelServerVersion": "1.0",
+  "license": "Apache 2.0",
+  "runtime": "python",
+  "engine": {
+    "engineName": "MXNet",
+    "engineVersion": "^1.2"
+  },
+  "model": {
+    "modelName": "ResNet_DUC_HDC",
+    "description": "ResNet_DUC_HDC",
+    "modelVersion": "1.0",
+    "handler": "duc_service:handle"
+  },
+  "publisher": {
+    "author": "MXNet SDK team",
+    "email": "noreply@amazon.com"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    {
+      "data_name": "data",
+      "data_shape": [
+        1,
+        60
+      ]
+    }
+  ]
+}
+

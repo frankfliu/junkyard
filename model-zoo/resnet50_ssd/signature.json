@@ -1,0 +1,13 @@
+{
+  "inputs": [
+    {
+      "data_name": "data",
+      "data_shape": [
+        1,
+        3,
+        512,
+        512
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "specificationVersion": "1.0",
+  "implementationVersion": "1.0",
+  "description": "squeezenet",
+  "modelServerVersion": "1.0",
+  "license": "Apache 2.0",
+  "runtime": "python",
+  "engine": {
+    "engineName": "MXNet",
+    "engineVersion": "^1.2"
+  },
+  "model": {
+    "modelName": "squeezenet_v1.1",
+    "description": "squeezenet",
+    "modelVersion": "1.0",
+    "handler": "mxnet_vision_service:handle"
+  },
+  "publisher": {
+    "author": "MXNet SDK team",
+    "email": "noreply@amazon.com"
+  }
+}

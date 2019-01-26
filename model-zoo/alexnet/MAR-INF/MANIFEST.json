@@ -1,0 +1,10 @@
+{
+  "modelServerVersion": "1.0", 
+  "specificationVersion": "1.0", 
+  "model": {
+    "handler": "mxnet_vision_service:handle", 
+    "modelName": "alexnet"
+  }, 
+  "runtime": "python", 
+  "implementationVersion": "1.0"
+}

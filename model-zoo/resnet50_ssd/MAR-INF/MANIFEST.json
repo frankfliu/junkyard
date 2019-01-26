@@ -1,0 +1,1 @@
+{"modelServerVersion": "1.0", "specificationVersion": "1.0", "model": {"handler": "ssd_service:handle", "modelName": "resnet50_ssd_model"}, "runtime": "python", "implementationVersion": "1.0"}

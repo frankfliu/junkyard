@@ -1,0 +1,22 @@
+{
+  "specificationVersion": "1.0",
+  "implementationVersion": "1.0",
+  "description": "arcface-resnet100",
+  "modelServerVersion": "1.0",
+  "license": "Apache 2.0",
+  "runtime": "python",
+  "engine": {
+    "engineName": "MXNet",
+    "engineVersion": "^1.2"
+  },
+  "model": {
+    "modelName": "resnet100",
+    "description": "arcface-resnet100",
+    "modelVersion": "1.0",
+    "handler": "arcface_service.py:handle"
+  },
+  "publisher": {
+    "author": "MXNet SDK team",
+    "email": "noreply@amazon.com"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "specificationVersion": "1.0",
+  "implementationVersion": "1.0",
+  "description": "lstm_ptb",
+  "modelServerVersion": "1.0",
+  "license": "Apache 2.0",
+  "runtime": "python",
+  "engine": {
+    "engineName": "MXNet",
+    "engineVersion": "^1.2"
+  },
+  "model": {
+    "modelName": "lstm_ptb",
+    "description": "lstm_ptb",
+    "modelVersion": "1.0",
+    "handler": "lstm_ptb_service:handle"
+  },
+  "publisher": {
+    "author": "MXNet SDK team",
+    "email": "noreply@amazon.com"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "inputs": [
+    {
+      "data_name": "data",
+      "data_shape": [
+        0,
+        3,
+        224,
+        224
+      ]
+    }
+  ]
+}

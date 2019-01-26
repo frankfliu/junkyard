@@ -1,0 +1,24 @@
+{
+  "inputs": [
+    {
+      "data_shape": [
+        0, 
+        3, 
+        224, 
+        224
+      ], 
+      "data_name": "data_0"
+    }
+  ], 
+  "input_type": "image/jpeg", 
+  "outputs": [
+    {
+      "data_shape": [
+        0, 
+        1000
+      ], 
+      "data_name": "softmax"
+    }
+  ], 
+  "output_type": "application/json"
+}
