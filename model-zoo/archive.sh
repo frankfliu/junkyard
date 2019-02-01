@@ -28,6 +28,7 @@ cd resnet-18 && zip -r ../resnet-18.mar . && cd ..
 cd resnet50_ssd && zip -r ../resnet50_ssd.mar . && cd ..
 cd resnext-101-64x4d && zip -r ../resnext-101-64x4d.mar . && cd ..
 cd squeezenet_v1.1 && zip -r ../squeezenet_v1.1.mar . && cd ..
+cd squeezenet_v1.1 && zip -r ../squeezenet_v1.1.mar . && cd ..
 cd squeezenet_v1.2 && zip -r ../squeezenet_v1.2.mar . && cd ..
 cd vgg16 && zip -r ../vgg16.mar . && cd ..
 cd vgg19 && zip -r ../vgg19.mar . && cd ..

@@ -27,6 +27,7 @@ cp -rf ~/source/mxnet-model-server/examples/model_service_template/* resnet-152
 cp -rf ~/source/mxnet-model-server/examples/model_service_template/* resnet-18
 cp -rf ~/source/mxnet-model-server/examples/model_service_template/* resnet50_ssd
 cp -rf ~/source/mxnet-model-server/examples/model_service_template/* resnext-101-64x4d
+cp -rf ~/source/mxnet-model-server/examples/model_service_template/* shufflenet
 cp -rf ~/source/mxnet-model-server/examples/model_service_template/* squeezenet_v1.1
 cp -rf ~/source/mxnet-model-server/examples/model_service_template/* squeezenet_v1.2
 cp -rf ~/source/mxnet-model-server/examples/model_service_template/* vgg16

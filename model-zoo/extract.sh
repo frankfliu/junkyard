@@ -27,7 +27,8 @@ mkdir -p resnet-152 && cd resnet-152 && unzip ../resnet-152.mar && cd ..
 mkdir -p resnet-18 && cd resnet-18 && unzip ../resnet-18.mar && cd ..
 mkdir -p resnet50_ssd && cd resnet50_ssd && unzip ../resnet50_ssd.mar && cd ..
 mkdir -p resnext-101-64x4d && cd resnext-101-64x4d && unzip ../resnext-101-64x4d.mar && cd ..
-mkdir -p squeezenet_v1.1 && cd squeezenet_v1.1 && unzip ../squeezenet_v1.1.mar && cd ..
+mkdir -p shufflenet && cd shufflenet && unzip ../shufflenet.mar && cd ..
+mkdir -p shufflenet && cd shufflenet && unzip ../shufflenet.mar && cd ..
 mkdir -p squeezenet_v1.2 && cd squeezenet_v1.2 && unzip ../squeezenet_v1.2.mar && cd ..
 mkdir -p vgg16 && cd vgg16 && unzip ../vgg16.mar && cd ..
 mkdir -p vgg19 && cd vgg19 && unzip ../vgg19.mar && cd ..
