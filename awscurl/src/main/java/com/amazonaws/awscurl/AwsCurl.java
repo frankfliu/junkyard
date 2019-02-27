@@ -52,14 +52,14 @@ public final class AwsCurl {
             if (args.length == 0
                     || args[0].equalsIgnoreCase("-h")
                     || args[0].equalsIgnoreCase("--help")) {
-                printHelp("java -jar " + jarName + " <URL>", options);
+                printHelp(jarName, options);
                 return;
             }
 
             CommandLine cmd = parser.parse(options, args, null, false);
             List<String> cmdArgs = cmd.getArgList();
             if (cmdArgs.isEmpty()) {
-                printHelp("java -jar " + jarName + " <URL>", options);
+                printHelp(jarName, options);
                 return;
             }
             Config config = new Config(cmd);
@@ -178,11 +178,17 @@ public final class AwsCurl {
             System.err.println(e.getMessage());
         } catch (ParseException e) {
             System.err.println(e.getMessage());
-            printHelp("java -jar " + jarName + " <URL>", options);
+            printHelp(jarName, options);
         }
     }
 
-    private static void printHelp(String message, Options options) {
+    private static void printHelp(String jarFileName, Options options) {
+        String message;
+        if (jarFileName == null) {
+            message = "awscurl <URL>";
+        } else {
+            message = "java -jar " + jarFileName + " <URL>";
+        }
         HelpFormatter formatter = new HelpFormatter();
         formatter.setLeftPadding(1);
         formatter.setWidth(120);
