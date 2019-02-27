@@ -6,7 +6,16 @@ buildscript {
     }
 }
 
-apply plugin: 'idea'
+plugins {
+    id "idea"
+    id "java"
+    id "co.riiid.gradle" version "0.4.2"
+}
+
+repositories {
+    jcenter()
+}
+
 idea {
     module {
         outputDir = file('build/classes/main')
@@ -14,11 +23,6 @@ idea {
     }
 }
 
-repositories {
-    jcenter()
-}
-
-apply plugin: 'java'
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
@@ -61,3 +65,21 @@ jar {
 
 apply from: file("${rootProject.projectDir}/tools/gradle/formatter.gradle")
 apply from: file("${rootProject.projectDir}/tools/gradle/check.gradle")
+
+
+github {
+    owner = "frankfliu"
+    repo = "junkyard"
+    token = "" + System.getenv("GITHUB_TOKEN")
+    tagName = "0.1.0"
+    targetCommitish = "master"
+    name = "awscurl v0.1.0"
+    body =
+        """
+# awscurl
+## Release Notes
+        """
+    assets = [
+        'build/libs/awscurl.jar'
+    ]
+}
