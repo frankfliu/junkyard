@@ -21,7 +21,7 @@ S3_PREFIX=https://s3.us-east-2.amazonaws.com/mxnet-public/precompiled_libraries/
 export MXNET_DIR=`pwd`
 export DEPS_PATH=${MXNET_DIR}/build/deps
 
-if [[ ! -d "${DEPS_PATH}" ]]; then
+if [[ ! -f "${DEPS_PATH}" ]]; then
     mkdir -p ${DEPS_PATH}
     cd ${DEPS_PATH}
     if [[ $PLATFORM == 'linux' ]]; then

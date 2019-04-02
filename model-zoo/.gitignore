@@ -5,4 +5,4 @@
 vocab_dict.txt
 *.caffemodel
 *.prototxt
-
+*.pyc
