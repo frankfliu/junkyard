@@ -172,6 +172,9 @@ public final class AwsCurl {
                     System.out.println(
                             String.format(
                                     "P90: %.2f ms.", list.get(successReq * 9 / 10) / 1000000d));
+                    System.out.println(
+                            String.format(
+                                    "P99: %.2f ms.", list.get(successReq * 99 / 100) / 1000000d));
                 }
             }
         } catch (IOException | InterruptedException e) {
