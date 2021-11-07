@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -266,6 +267,7 @@ public final class AwsCurl {
                 connectTimeout = 2000;
             }
             data = cmd.getOptionValues("data");
+            System.out.println("data: " + Arrays.toString(data));
             dataRaw = cmd.getOptionValues("data-raw");
             dataAscii = cmd.getOptionValues("data-ascii");
             dataBinary = cmd.getOptionValues("data-binary");
@@ -550,7 +552,7 @@ public final class AwsCurl {
                 }
             }
             if (contentType != null) {
-                map.put("Content-Type", contentType);
+                map.putIfAbsent("Content-Type", contentType);
             }
             if (referer != null) {
                 map.put("Referer", referer);
