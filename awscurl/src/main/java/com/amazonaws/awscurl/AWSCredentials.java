@@ -3,9 +3,9 @@ package com.amazonaws.awscurl;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class AWSCredentials {
 
@@ -134,7 +134,7 @@ public class AWSCredentials {
     }
 
     private static Map<String, String> loadProfile(File file, String profile) {
-        Map<String, String> map = new HashMap<>();
+        Map<String, String> map = new ConcurrentHashMap<>();
         try (Scanner scanner = new Scanner(file, StandardCharsets.UTF_8.name())) {
             boolean profileFound = false;
             while (scanner.hasNextLine()) {

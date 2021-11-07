@@ -21,6 +21,7 @@
 
     <!-- Headers -->
     <module name="Header">
+        <property name="headerFile" value="${checkstyle.licenseHeader.file}"/>
         <property name="fileExtensions" value="java"/>
         <property name="ignoreLines" value="2"/>
         <property name="id" value="header"/>
@@ -107,6 +108,7 @@
         <property name="eachLine" value="false"/>
     </module>
     -->
+    <module name="JavadocPackage"/>
 
     <module name="TreeWalker">
         <!--
@@ -280,7 +282,6 @@
         <module name="UnusedImports"/>
 
         <!-- Javadoc Comments -->
-        <!--
         <module name="AtclauseOrder"/>
         <module name="JavadocMethod">
             <property name="allowUndeclaredRTE" value="true"/>
@@ -296,7 +297,6 @@
         <module name="MissingJavadocMethod"/>
         <module name="MissingJavadocPackage"/>
         <module name="MissingJavadocType"/>
-        -->
         <!--
         <module name="JavadocType">
             <property name="allowUnknownTags" value="true"/>
