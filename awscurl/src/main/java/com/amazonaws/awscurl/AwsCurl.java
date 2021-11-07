@@ -2,6 +2,7 @@ package com.amazonaws.awscurl;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -635,11 +636,13 @@ public final class AwsCurl {
 
             if (uploadFile != null) {
                 requestMethod = requestMethod == null ? "PUT" : requestMethod;
-                for (String header : headers) {
-                    String[] pair = header.split(":", 2);
-                    String key = pair[0].trim();
-                    if ("content-type".equalsIgnoreCase(key)) {
-                        contentType = pair[1].trim();
+                if (headers != null) {
+                    for (String header : headers) {
+                        String[] pair = header.split(":", 2);
+                        String key = pair[0].trim();
+                        if ("content-type".equalsIgnoreCase(key)) {
+                            contentType = pair[1].trim();
+                        }
                     }
                 }
                 if (contentType == null) {
@@ -652,7 +655,11 @@ public final class AwsCurl {
         }
 
         private byte[] readFile(String fileName) throws IOException {
-            try (InputStream is = Files.newInputStream(Paths.get(fileName))) {
+            Path path = Paths.get(fileName);
+            if (!Files.isRegularFile(path)) {
+                throw new FileNotFoundException("File not found: " + fileName);
+            }
+            try (InputStream is = Files.newInputStream(path)) {
                 return IOUtils.toByteArray(is);
             }
         }
