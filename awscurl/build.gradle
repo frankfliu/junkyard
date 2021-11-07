@@ -9,7 +9,6 @@ buildscript {
 plugins {
     id "idea"
     id "java"
-    id "co.riiid.gradle" version "0.4.2"
     id "com.github.spotbugs" version "4.7.1" apply false
 }
 
@@ -75,21 +74,3 @@ jar.doLast {
 
 apply from: file("${rootProject.projectDir}/tools/gradle/java-formatter.gradle")
 apply from: file("${rootProject.projectDir}/tools/gradle/check.gradle")
-
-github {
-    owner = "frankfliu"
-    repo = "junkyard"
-    token = "" + System.getenv("GITHUB_TOKEN")
-    tagName = "0.1.0"
-    targetCommitish = "master"
-    name = "awscurl v0.1.0"
-    body =
-        """
-# awscurl
-## Release Notes
-        """
-    assets = [
-            "build/libs/awscurl.jar",
-            "build/awscurl"
-    ]
-}
