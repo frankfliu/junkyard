@@ -2,8 +2,6 @@ package com.amazonaws.awscurl;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -12,14 +10,17 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,8 +51,8 @@ public final class AwsCurl {
         DefaultParser parser = new DefaultParser();
         try {
             if (args.length == 0
-                    || args[0].equalsIgnoreCase("-h")
-                    || args[0].equalsIgnoreCase("--help")) {
+                    || "-h".equalsIgnoreCase(args[0])
+                    || "--help".equalsIgnoreCase(args[0])) {
                 printHelp(jarName, options);
                 return;
             }
@@ -153,28 +154,20 @@ public final class AwsCurl {
                 Collections.sort(list);
                 long totalTime = list.stream().mapToLong(val -> val).sum();
 
-                System.out.println(String.format("Total time: %.2f ms.", delta / 1000000d));
-                System.out.println(
-                        String.format(
-                                "Non 200 responses: %d, error rate: %.2f",
-                                errorReq, 100d * errorReq / totalRequest));
+                System.out.printf("Total time: %.2f ms.%n", delta / 1000000d);
+                System.out.printf(
+                        "Non 200 responses: %d, error rate: %.2f%n",
+                        errorReq, 100d * errorReq / totalRequest);
                 System.out.println("Concurrent clients: " + clients);
                 System.out.println("Total requests: " + totalRequest);
                 if (successReq > 0) {
-                    System.out.println(
-                            String.format("TPS: %.2f/s", successReq * 1000000000d / delta));
-                    System.out.println(
-                            String.format(
-                                    "Average Latency: %.2f ms.",
-                                    totalTime / 1000000d / successReq));
-                    System.out.println(
-                            String.format("P50: %.2f ms.", list.get(successReq / 2) / 1000000d));
-                    System.out.println(
-                            String.format(
-                                    "P90: %.2f ms.", list.get(successReq * 9 / 10) / 1000000d));
-                    System.out.println(
-                            String.format(
-                                    "P99: %.2f ms.", list.get(successReq * 99 / 100) / 1000000d));
+                    System.out.printf("TPS: %.2f/s%n", successReq * 1000000000d / delta);
+                    System.out.printf(
+                            "Average Latency: %.2f ms.%n", totalTime / 1000000d / successReq);
+                    System.out.printf("P50: %.2f ms.%n", list.get(successReq / 2) / 1000000d);
+                    System.out.printf("P90: %.2f ms.%n", list.get(successReq * 9 / 10) / 1000000d);
+                    System.out.printf(
+                            "P99: %.2f ms.%n", list.get(successReq * 99 / 100) / 1000000d);
                 }
             }
         } catch (IOException | InterruptedException e) {
@@ -287,7 +280,6 @@ public final class AwsCurl {
             insecure = cmd.hasOption("insecure");
             output = cmd.getOptionValue("output");
             referer = cmd.getOptionValue("referer");
-            output = cmd.getOptionValue("output");
             uploadFile = cmd.getOptionValue("upload-file");
             userAgent = cmd.getOptionValue("user-agent");
             verbose = cmd.hasOption("verbose");
@@ -501,10 +493,10 @@ public final class AwsCurl {
 
         public OutputStream getOutput() throws IOException {
             if (output != null) {
-                return new FileOutputStream(output);
+                return Files.newOutputStream(Paths.get(output));
             }
             if (nRequests > 1) {
-                return new NullOutputStream();
+                return NullOutputStream.NULL_OUTPUT_STREAM;
             }
             return System.out;
         }
@@ -537,7 +529,7 @@ public final class AwsCurl {
         }
 
         public Map<String, String> getRequestHeaders() {
-            Map<String, String> map = new HashMap<>();
+            Map<String, String> map = new ConcurrentHashMap<>();
             if (headers != null) {
                 for (String header : headers) {
                     String[] pair = header.split(":", 2);
@@ -660,7 +652,7 @@ public final class AwsCurl {
         }
 
         private byte[] readFile(String fileName) throws IOException {
-            try (FileInputStream is = new FileInputStream(fileName)) {
+            try (InputStream is = Files.newInputStream(Paths.get(fileName))) {
                 return IOUtils.toByteArray(is);
             }
         }
@@ -674,7 +666,12 @@ public final class AwsCurl {
                 switch (encodeType) {
                     case 1: // data, data-ascii, data-binary
                         if (content.startsWith("@")) {
-                            try (InputStream is = new FileInputStream(content.substring(1))) {
+                            String dataFile = content.substring(1);
+                            Path path = Paths.get(dataFile);
+                            if (!Files.isRegularFile(path)) {
+                                throw new IOException("Invalid input file: " + dataFile);
+                            }
+                            try (InputStream is = Files.newInputStream(path)) {
                                 IOUtils.copy(is, bos);
                             }
                         } else {

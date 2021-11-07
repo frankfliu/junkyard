@@ -84,7 +84,7 @@ public final class HttpClient {
     }
 
     public static Map<String, List<String>> parseQueryString(String queryString) {
-        Map<String, List<String>> parameters = new LinkedHashMap<>();
+        Map<String, List<String>> parameters = new LinkedHashMap<>(); // NOPMD
         if (StringUtils.isEmpty(queryString)) {
             return parameters;
         }
