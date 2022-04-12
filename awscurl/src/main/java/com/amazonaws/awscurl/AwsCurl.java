@@ -15,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -76,8 +75,7 @@ public final class AwsCurl {
             }
 
             String serviceName = config.getServiceName();
-            SignableRequest request = new SignableRequest(serviceName);
-            request.setUri(uri);
+            SignableRequest request = new SignableRequest(serviceName, uri);
             request.setContent(config.getRequestBody());
             request.setHeaders(config.getRequestHeaders());
             request.setHttpMethod(config.getRequestMethod());
@@ -105,8 +103,8 @@ public final class AwsCurl {
                     }
                 }
 
-                AWS4Signer signer = new AWS4Signer(serviceName, region);
-                signer.sign(request, credentials);
+                AWS4Signer signer = new AWS4Signer(serviceName, region, credentials);
+                request.setSigner(signer);
             }
 
             boolean insecure = config.isInsecure();
@@ -124,6 +122,7 @@ public final class AwsCurl {
                 tasks.add(
                         () -> {
                             for (int j = 0; j < nRequests; ++j) {
+                                request.sign();
                                 long begin = System.nanoTime();
                                 int code =
                                         HttpClient.sendRequest(
@@ -267,7 +266,6 @@ public final class AwsCurl {
                 connectTimeout = 2000;
             }
             data = cmd.getOptionValues("data");
-            System.out.println("data: " + Arrays.toString(data));
             dataRaw = cmd.getOptionValues("data-raw");
             dataAscii = cmd.getOptionValues("data-ascii");
             dataBinary = cmd.getOptionValues("data-binary");
@@ -595,6 +593,7 @@ public final class AwsCurl {
             return url;
         }
 
+        @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
         public byte[] getRequestBody() throws IOException {
             if (forceGet) {
                 return null;

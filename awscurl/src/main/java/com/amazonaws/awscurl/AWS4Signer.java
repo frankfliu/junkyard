@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.apache.commons.codec.binary.Hex;
@@ -36,7 +37,6 @@ public class AWS4Signer {
     private static final String X_AMZ_SIGNATURE = "X-Amz-Signature";
     private static final String X_AMZ_ALGORITHM = "X-Amz-Algorithm";
     private static final String AUTHORIZATION = "Authorization";
-    private static final String HOST = "Host";
 
     private static final String ALG_HMAC_SHA256 = "HmacSHA256";
     private static final String ALG_SHA256 = "SHA-256";
@@ -46,11 +46,13 @@ public class AWS4Signer {
 
     private String serviceName;
     private String regionName;
+    private AWSCredentials credentials;
     private Date overriddenDate;
 
-    public AWS4Signer(String serviceName, String region) {
+    public AWS4Signer(String serviceName, String region, AWSCredentials credentials) {
         this.serviceName = serviceName;
         this.regionName = region;
+        this.credentials = credentials;
     }
 
     public void setOverrideDate(Date overriddenDate) {
@@ -61,34 +63,35 @@ public class AWS4Signer {
         return overriddenDate;
     }
 
-    public void sign(SignableRequest request, AWSCredentials credentials) {
+    public void sign(SignableRequest request) {
         if (credentials.getAWSAccessKeyId() == null) {
             return;
         }
 
+        Map<String, String> map = new ConcurrentHashMap<>();
         String sessionToken = credentials.getSessionToken();
         if (!StringUtils.isEmpty(sessionToken)) {
-            request.addHeader(X_AMZ_SECURITY_TOKEN, sessionToken);
+            map.put(X_AMZ_SECURITY_TOKEN, sessionToken);
         }
 
         AWS4SignerRequestParams signerParams =
                 new AWS4SignerRequestParams(
                         request, overriddenDate, regionName, serviceName, AWS4_SIGNING_ALGORITHM);
 
-        request.addHeader(HOST, request.getHost());
-        request.addHeader(X_AMZ_DATE, signerParams.getFormattedSigningDateTime());
+        map.put(X_AMZ_DATE, signerParams.getFormattedSigningDateTime());
 
         String contentSha256 = calculateContentHash(request);
-        request.addHeader(X_AMZ_CONTENT_SHA256, contentSha256);
+        map.put(X_AMZ_CONTENT_SHA256, contentSha256);
 
         String canonicalRequest = createCanonicalRequest(request, contentSha256);
         String stringToSign = createStringToSign(canonicalRequest, signerParams);
         byte[] signingKey = deriveSigningKey(credentials, signerParams);
         byte[] signature = hmacSha256(stringToSign, signingKey);
 
-        request.addHeader(
+        map.put(
                 AUTHORIZATION,
                 buildAuthorizationHeader(request, signature, credentials, signerParams));
+        request.setSignedHeaders(map);
     }
 
     public void presignRequest(
@@ -97,10 +100,10 @@ public class AWS4Signer {
             return;
         }
 
-        request.addHeader(HOST, request.getHost());
+        Map<String, String> map = new ConcurrentHashMap<>();
         String sessionToken = credentials.getSessionToken();
         if (!StringUtils.isEmpty(sessionToken)) {
-            request.addHeader(X_AMZ_SECURITY_TOKEN, sessionToken);
+            map.put(X_AMZ_SECURITY_TOKEN, sessionToken);
         }
 
         AWS4SignerRequestParams signerRequestParams =
@@ -122,6 +125,7 @@ public class AWS4Signer {
         byte[] signature = hmacSha256(stringToSign, signingKey);
 
         request.addParameter(X_AMZ_SIGNATURE, Hex.encodeHexString(signature));
+        request.setSignedHeaders(map);
     }
 
     private String createCanonicalRequest(SignableRequest request, String contentSha256) {

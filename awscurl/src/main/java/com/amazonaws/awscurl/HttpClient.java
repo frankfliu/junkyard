@@ -12,6 +12,7 @@ import java.util.Map;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.output.NullOutputStream;
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpDelete;
@@ -54,13 +55,8 @@ public final class HttpClient {
                 System.out.println("> ");
             }
 
-            Map<String, String> headers = request.getHeaders();
-            for (Map.Entry<String, String> entry : headers.entrySet()) {
-                if (dumpHeader) {
-                    System.out.println("> " + entry.getKey() + ": " + entry.getValue());
-                }
-                req.addHeader(entry.getKey(), entry.getValue());
-            }
+            addHeaders(req, request.getHeaders(), dumpHeader);
+            addHeaders(req, request.getSignedHeaders(), dumpHeader);
 
             HttpResponse resp = client.execute(req);
             int code = resp.getStatusLine().getStatusCode();
@@ -74,12 +70,24 @@ public final class HttpClient {
                 }
                 System.out.println("< ");
             }
-
-            try (InputStream is = resp.getEntity().getContent()) {
-                IOUtils.copy(is, ps);
-                ps.flush();
+            if (code != 200 && ps instanceof NullOutputStream) {
+                System.out.println(resp.getEntity().toString());
+            } else {
+                try (InputStream is = resp.getEntity().getContent()) {
+                    IOUtils.copy(is, ps);
+                    ps.flush();
+                }
             }
             return code;
+        }
+    }
+
+    private static void addHeaders(HttpUriRequest req, Map<String, String> headers, boolean dump) {
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            if (dump) {
+                System.out.println("> " + entry.getKey() + ": " + entry.getValue());
+            }
+            req.addHeader(entry.getKey(), entry.getValue());
         }
     }
 
