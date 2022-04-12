@@ -2,42 +2,62 @@ package com.amazonaws.awscurl;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class SignableRequest {
 
     private String serviceName;
     private String httpMethod;
     private URI uri;
-    private String host;
     private String path;
     private Map<String, String> headers;
+    private Map<String, String> signedHeaders;
     private Map<String, List<String>> parameters;
+    private AWS4Signer signer;
 
     private byte[] content;
     private int timeOffset;
+    private long signingTime;
 
-    public SignableRequest(String serviceName) {
+    public SignableRequest(String serviceName, URI uri) {
         this.serviceName = serviceName;
         httpMethod = "POST";
-        headers = new HashMap<>();
+        headers = new ConcurrentHashMap<>();
         parameters = new LinkedHashMap<>();
         headers.put("User-Agent", "awscurl/1.0.0");
         headers.put("Accept", "*/*");
+        signedHeaders = new ConcurrentHashMap<>();
+        setUri(uri);
+    }
+
+    public void sign() {
+        if (signer == null) {
+            return;
+        }
+        long now = System.nanoTime();
+        if (now - signingTime > 2 * 60000000000L) {
+            signingTime = now;
+            signer.sign(this);
+        }
     }
 
     public String getServiceName() {
         return serviceName;
     }
 
-    public void setUri(URI uri) {
+    public void setSigner(AWS4Signer signer) {
+        this.signer = signer;
+    }
+
+    private void setUri(URI uri) {
         this.uri = uri;
         String schema = uri.getScheme().toLowerCase(Locale.ENGLISH);
         int port = uri.getPort();
+        String host = null;
         if (port != -1) {
             int defaultPort;
             if ("https".equals(schema)) {
@@ -71,10 +91,6 @@ public class SignableRequest {
         this.httpMethod = httpMethod;
     }
 
-    public String getHost() {
-        return host;
-    }
-
     public String getPath() {
         return path;
     }
@@ -85,7 +101,7 @@ public class SignableRequest {
         }
     }
 
-    public void addHeader(String name, String value) {
+    private void addHeader(String name, String value) {
         for (String key : headers.keySet()) {
             if (key.equalsIgnoreCase(name)) {
                 headers.remove(key);
@@ -97,6 +113,14 @@ public class SignableRequest {
 
     public Map<String, String> getHeaders() {
         return headers;
+    }
+
+    public Map<String, String> getSignedHeaders() {
+        return signedHeaders;
+    }
+
+    public void setSignedHeaders(Map<String, String> signedHeaders) {
+        this.signedHeaders = signedHeaders;
     }
 
     public void setParameters(Map<String, List<String>> parameters) {
