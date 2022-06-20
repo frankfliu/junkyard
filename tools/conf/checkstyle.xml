@@ -19,12 +19,14 @@
     </module>
     <module name="SuppressWarningsFilter"/>
 
-    <!-- Headers -->
+    <!-- Headers
     <module name="Header">
+        <property name="headerFile" value="${checkstyle.licenseHeader.file}"/>
         <property name="fileExtensions" value="java"/>
         <property name="ignoreLines" value="2"/>
         <property name="id" value="header"/>
     </module>
+    -->
     <!--
     <module name="RegexpHeader">
         <property name="headerFile" value="${checkstyle.regexp.header.file}"/>
@@ -106,6 +108,7 @@
     <module name="FileTabCharacter">
         <property name="eachLine" value="false"/>
     </module>
+    <module name="JavadocPackage"/>
     -->
 
     <module name="TreeWalker">
@@ -268,7 +271,6 @@
         <module name="ImportControl">
             <property name="file" value="${checkstyle.importcontrol.file}"/>
         </module>
-        -->
         <module name="ImportOrder">
             <property name="option" value="under"/>
             <property name="groups" value=""/>
@@ -276,11 +278,11 @@
             <property name="separated" value="true"/>
             <property name="sortStaticImportsAlphabetically" value="true"/>
         </module>
+        -->
         <module name="RedundantImport"/>
         <module name="UnusedImports"/>
 
         <!-- Javadoc Comments -->
-        <!--
         <module name="AtclauseOrder"/>
         <module name="JavadocMethod">
             <property name="allowUndeclaredRTE" value="true"/>
@@ -293,11 +295,12 @@
         <module name="JavadocTagContinuationIndentation"/>
         <module name="NonEmptyAtclauseDescription"/>
         <module name="SummaryJavadoc"/>
-        <module name="MissingJavadocMethod"/>
+        <!--
+        <module name="MissingJavadocMethod">
+            <property name="allowedAnnotations" value="" />
+        </module>
         <module name="MissingJavadocPackage"/>
         <module name="MissingJavadocType"/>
-        -->
-        <!--
         <module name="JavadocType">
             <property name="allowUnknownTags" value="true"/>
         </module>

@@ -1,0 +1,80 @@
+plugins {
+    id "com.github.spotbugs" version "4.7.1" apply false
+}
+
+defaultTasks 'build'
+
+allprojects {
+    group 'org.examples'
+    version = "0.3.0"
+
+    repositories {
+        mavenCentral()
+    }
+
+    apply plugin: 'idea'
+    idea {
+        module {
+            outputDir = file('build/classes/java/main')
+            testOutputDir = file('build/classes/java/test')
+            // inheritOutputDirs = true
+        }
+    }
+}
+
+def javaProjects() {
+    return subprojects.findAll { new File(it.projectDir, "src/main").exists() }
+}
+
+configure(javaProjects()) {
+    apply plugin: 'java-library'
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+    compileJava.options.encoding = "UTF-8"
+    compileTestJava.options.encoding = "UTF-8"
+    compileJava.options.compilerArgs.addAll(["--release", "11"])
+
+    apply plugin: 'eclipse'
+
+    eclipse {
+        jdt.file.withProperties { props ->
+            props.setProperty "org.eclipse.jdt.core.circularClasspath", "warning"
+        }
+        classpath {
+            sourceSets.test.java {
+                srcDirs = ["src/test/java"]
+                exclude "**/package-info.java"
+            }
+        }
+    }
+
+    apply from: file("${rootProject.projectDir}/tools/gradle/java-formatter.gradle")
+    apply from: file("${rootProject.projectDir}/tools/gradle/check.gradle")
+
+    test {
+        // tensorflow mobilenet and resnet require more cpu memory
+        maxHeapSize = "4096m"
+        doFirst {
+            jvmArgs = [
+                    '--add-opens', "java.base/jdk.internal.loader=ALL-UNNAMED"
+            ]
+        }
+
+        useTestNG() {
+            // suiteXmlFiles << new File(rootDir, "testng.xml") //This is how to add custom testng.xml
+        }
+
+        testLogging {
+            showStandardStreams = true
+            events "passed", "skipped", "failed", "standardOut", "standardError"
+        }
+    }
+
+    compileJava {
+        options.compilerArgs << "-proc:none" << "-Xlint:all,-options,-static" << "-Werror"
+    }
+
+    compileTestJava {
+        options.compilerArgs << "-proc:none" << "-Xlint:all,-options,-static" << "-Werror"
+    }
+}

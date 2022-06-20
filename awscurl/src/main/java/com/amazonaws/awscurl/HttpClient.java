@@ -1,16 +1,5 @@
 package com.amazonaws.awscurl;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URI;
-import java.security.GeneralSecurityException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLContext;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.http.Header;
@@ -29,6 +18,19 @@ import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContextBuilder;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URI;
+import java.security.GeneralSecurityException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
 
 @SuppressWarnings("PMD.SystemPrintln")
 public final class HttpClient {
@@ -71,6 +73,7 @@ public final class HttpClient {
                 System.out.println("< ");
             }
             if (code != 200 && ps instanceof NullOutputStream) {
+                System.out.println(request.getSignedHeaders().get("Authorization"));
                 System.out.println(resp.getEntity().toString());
             } else {
                 try (InputStream is = resp.getEntity().getContent()) {

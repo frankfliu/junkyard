@@ -1,5 +1,7 @@
 package com.amazonaws.awscurl;
 
+import org.apache.commons.codec.binary.Hex;
+
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -16,9 +18,9 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import org.apache.commons.codec.binary.Hex;
 
 public class AWS4Signer {
 
