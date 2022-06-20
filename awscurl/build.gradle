@@ -1,46 +1,5 @@
-buildscript {
-    repositories {
-        maven {
-            url "https://plugins.gradle.org/m2/"
-        }
-    }
-}
-
 plugins {
-    id "idea"
     id "java"
-    id "com.github.spotbugs" version "4.7.1" apply false
-}
-
-repositories {
-    mavenCentral()
-}
-
-idea {
-    module {
-        outputDir = file('build/classes/main')
-        testOutputDir = file('build/classes/test')
-    }
-}
-
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
-
-defaultTasks 'jar'
-
-test {
-    useTestNG() {
-        // suiteXmlFiles << new File(rootDir, "testng.xml") //This is how to add custom testng.xml
-    }
-
-    testLogging {
-        showStandardStreams = true
-        events "passed", "skipped", "failed", "standardOut", "standardError"
-    }
-}
-
-compileJava {
-    options.compilerArgs << "-Xlint:all,-options,-static" << "-Werror"
 }
 
 dependencies {
@@ -50,7 +9,7 @@ dependencies {
     implementation "org.apache.httpcomponents:httpclient:4.5.13"
     implementation "org.apache.httpcomponents:httpmime:4.5.13"
 
-    testImplementation "org.testng:testng:6.8.1"
+    testImplementation 'org.testng:testng:7.6.0'
 }
 
 jar {
@@ -67,10 +26,7 @@ jar.doLast {
     exec {
         workingDir "."
         executable "sh"
-        args "-c", "cat src/main/scripts/stub.sh build/libs/awscurl.jar > build/awscurl && chmod +x build/awscurl"
-        //commandLine "sh -c 'cat src/main/scripts/stub.sh build/libs/awscurl.jar > build/awscurl && chmod +x build/awscurl'"
+        args "-c", "cat src/main/scripts/stub.sh build/libs/awscurl*.jar > build/awscurl && chmod +x build/awscurl"
+        //commandLine "sh -c 'cat src/main/scripts/stub.sh build/libs/awscurl*.jar > build/awscurl && chmod +x build/awscurl'"
     }
 }
-
-apply from: file("${rootProject.projectDir}/tools/gradle/java-formatter.gradle")
-apply from: file("${rootProject.projectDir}/tools/gradle/check.gradle")
