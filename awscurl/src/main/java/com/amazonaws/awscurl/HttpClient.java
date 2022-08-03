@@ -73,8 +73,11 @@ public final class HttpClient {
                 System.out.println("< ");
             }
             if (code != 200 && ps instanceof NullOutputStream) {
-                System.out.println(request.getSignedHeaders().get("Authorization"));
-                System.out.println(resp.getEntity().toString());
+                System.out.println(
+                        "HTTP error ("
+                                + resp.getStatusLine()
+                                + "): "
+                                + resp.getEntity().toString());
             } else {
                 try (InputStream is = resp.getEntity().getContent()) {
                     IOUtils.copy(is, ps);
