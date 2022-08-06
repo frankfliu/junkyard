@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -77,7 +78,8 @@ public final class HttpClient {
                         "HTTP error ("
                                 + resp.getStatusLine()
                                 + "): "
-                                + resp.getEntity().toString());
+                                + IOUtils.toString(
+                                        resp.getEntity().getContent(), StandardCharsets.UTF_8));
             } else {
                 try (InputStream is = resp.getEntity().getContent()) {
                     IOUtils.copy(is, ps);
