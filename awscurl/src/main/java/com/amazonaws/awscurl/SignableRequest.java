@@ -34,6 +34,8 @@ public class SignableRequest {
         setUri(uri);
     }
 
+    private SignableRequest() {}
+
     public void sign() {
         if (signer == null) {
             return;
@@ -43,6 +45,22 @@ public class SignableRequest {
             signingTime = now;
             signer.sign(this);
         }
+    }
+
+    public SignableRequest copy() {
+        SignableRequest req = new SignableRequest();
+        req.serviceName = serviceName;
+        req.uri = uri;
+        req.httpMethod = httpMethod;
+        req.path = path;
+        req.headers = new ConcurrentHashMap<>(headers);
+        req.headers.remove("X-Amzn-SageMaker-Custom-Attributes");
+        req.signedHeaders = new ConcurrentHashMap<>();
+        req.parameters = new ConcurrentHashMap<>(parameters);
+        req.signer = signer;
+        req.content = content;
+        req.timeOffset = timeOffset;
+        return req;
     }
 
     public String getServiceName() {
@@ -101,7 +119,7 @@ public class SignableRequest {
         }
     }
 
-    private void addHeader(String name, String value) {
+    void addHeader(String name, String value) {
         for (String key : headers.keySet()) {
             if (key.equalsIgnoreCase(name)) {
                 headers.remove(key);
