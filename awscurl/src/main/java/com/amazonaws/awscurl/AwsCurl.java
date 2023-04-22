@@ -9,6 +9,7 @@ import org.apache.commons.cli.ParseException;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.NullOutputStream;
+import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.entity.ContentType;
@@ -46,6 +47,8 @@ import java.util.regex.Pattern;
 
 @SuppressWarnings("PMD.SystemPrintln")
 public final class AwsCurl {
+
+    private static final String SM_CUSTOM_HEADER = "X-Amzn-SageMaker-Custom-Attributes";
 
     private AwsCurl() {}
 
@@ -136,6 +139,38 @@ public final class AwsCurl {
                                                 os,
                                                 printHeader);
                                 int code = resp.getStatusLine().getStatusCode();
+                                if (code >= 300) {
+                                    errors.add(System.nanoTime() - begin);
+                                    continue;
+                                }
+
+                                String token = getNextToken(resp.getFirstHeader(SM_CUSTOM_HEADER));
+                                int iteration = 0;
+                                while (token != null) {
+                                    Thread.sleep(200);
+                                    SignableRequest req = request.copy();
+                                    req.addHeader(SM_CUSTOM_HEADER, "x-starting-token=" + token);
+                                    req.sign();
+                                    resp =
+                                            HttpClient.sendRequest(
+                                                    req,
+                                                    insecure,
+                                                    config.getConnectTimeout(),
+                                                    os,
+                                                    printHeader);
+                                    code = resp.getStatusLine().getStatusCode();
+                                    if (code >= 300) {
+                                        break;
+                                    }
+
+                                    token = getNextToken(resp.getFirstHeader(SM_CUSTOM_HEADER));
+                                    if (++iteration > 200) {
+                                        System.out.println("exceed 200 pagination requests.");
+                                        code = 500;
+                                        break;
+                                    }
+                                }
+
                                 if (code < 300) {
                                     queue.add(System.nanoTime() - begin);
                                 } else {
@@ -234,6 +269,17 @@ public final class AwsCurl {
         matcher = pattern.matcher(url);
         if (matcher.matches()) {
             return matcher.group(3);
+        }
+        return null;
+    }
+
+    static String getNextToken(Header header) {
+        if (header == null) {
+            return null;
+        }
+        String[] pair = header.getValue().split("=", 2);
+        if (pair.length == 2 && "x-next-token".equalsIgnoreCase(pair[0])) {
+            return pair[1];
         }
         return null;
     }
