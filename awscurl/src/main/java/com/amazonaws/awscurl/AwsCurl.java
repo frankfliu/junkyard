@@ -10,6 +10,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 
@@ -36,8 +37,10 @@ import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -125,14 +128,15 @@ public final class AwsCurl {
                             for (int j = 0; j < nRequests; ++j) {
                                 request.sign();
                                 long begin = System.nanoTime();
-                                int code =
+                                HttpResponse resp =
                                         HttpClient.sendRequest(
                                                 request,
                                                 insecure,
                                                 config.getConnectTimeout(),
                                                 os,
                                                 printHeader);
-                                if (code == 200) {
+                                int code = resp.getStatusLine().getStatusCode();
+                                if (code < 300) {
                                     queue.add(System.nanoTime() - begin);
                                 } else {
                                     errors.add(System.nanoTime() - begin);
@@ -143,10 +147,18 @@ public final class AwsCurl {
             }
 
             long start = System.nanoTime();
-            executor.invokeAll(tasks);
+            List<Future<Void>> futures = executor.invokeAll(tasks);
             long delta = System.nanoTime() - start;
 
             executor.shutdown();
+
+            for (Future<Void> future : futures) {
+                try {
+                    future.get();
+                } catch (ExecutionException e) {
+                    e.getCause().printStackTrace();
+                }
+            }
 
             if (nRequests > 1 && clients > 0) {
                 int totalRequest = clients * nRequests;
@@ -261,10 +273,10 @@ public final class AwsCurl {
                 if (cmd.hasOption("connect-timeout")) {
                     connectTimeout = Integer.parseInt(cmd.getOptionValue("connect-timeout")) * 1000;
                 } else {
-                    connectTimeout = 2000;
+                    connectTimeout = 30000;
                 }
             } catch (NumberFormatException e) {
-                connectTimeout = 2000;
+                connectTimeout = 30000;
             }
             data = cmd.getOptionValues("data");
             dataRaw = cmd.getOptionValues("data-raw");

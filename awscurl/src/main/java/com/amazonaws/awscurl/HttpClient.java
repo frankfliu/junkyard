@@ -4,6 +4,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
 import org.apache.http.client.methods.HttpGet;
@@ -38,14 +39,14 @@ public final class HttpClient {
 
     private HttpClient() {}
 
-    public static int sendRequest(
+    public static HttpResponse sendRequest(
             SignableRequest request,
             boolean insecure,
-            int timeOut,
+            int timeout,
             OutputStream ps,
             boolean dumpHeader)
             throws IOException {
-        try (CloseableHttpClient client = getHttpClient(insecure)) {
+        try (CloseableHttpClient client = getHttpClient(insecure, timeout)) {
             HttpUriRequest req =
                     createHttpRequest(
                             request.getHttpMethod(), request.getUri(), request.getContent());
@@ -73,7 +74,7 @@ public final class HttpClient {
                 }
                 System.out.println("< ");
             }
-            if (code != 200 && ps instanceof NullOutputStream) {
+            if (code >= 300 && ps instanceof NullOutputStream) {
                 System.out.println(
                         "HTTP error ("
                                 + resp.getStatusLine()
@@ -86,7 +87,7 @@ public final class HttpClient {
                     ps.flush();
                 }
             }
-            return code;
+            return resp;
         }
     }
 
@@ -117,7 +118,13 @@ public final class HttpClient {
         return parameters;
     }
 
-    private static CloseableHttpClient getHttpClient(boolean insecure) {
+    private static CloseableHttpClient getHttpClient(boolean insecure, int timeout) {
+        RequestConfig config =
+                RequestConfig.custom()
+                        .setConnectTimeout(timeout)
+                        .setConnectionRequestTimeout(timeout)
+                        .setSocketTimeout(timeout)
+                        .build();
         if (insecure) {
             try {
                 SSLContext context =
@@ -129,12 +136,15 @@ public final class HttpClient {
                 SSLConnectionSocketFactory factory =
                         new SSLConnectionSocketFactory(context, verifier);
 
-                return HttpClients.custom().setSSLSocketFactory(factory).build();
+                return HttpClients.custom()
+                        .setDefaultRequestConfig(config)
+                        .setSSLSocketFactory(factory)
+                        .build();
             } catch (GeneralSecurityException e) {
                 throw new AssertionError(e);
             }
         }
-        return HttpClients.createDefault();
+        return HttpClients.custom().setDefaultRequestConfig(config).build();
     }
 
     private static HttpUriRequest createHttpRequest(String method, URI uri, byte[] data) {
