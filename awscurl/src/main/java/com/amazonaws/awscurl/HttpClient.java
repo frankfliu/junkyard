@@ -1,5 +1,8 @@
 package com.amazonaws.awscurl;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.http.Header;
@@ -19,10 +22,12 @@ import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContextBuilder;
+import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Type;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -30,12 +35,16 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 
 @SuppressWarnings("PMD.SystemPrintln")
 public final class HttpClient {
+
+    private static final Gson GSON = new Gson();
+    private static final Type LIST_TYPE = new TypeToken<List<Map<String, String>>>() {}.getType();
 
     private HttpClient() {}
 
@@ -44,7 +53,8 @@ public final class HttpClient {
             boolean insecure,
             int timeout,
             OutputStream ps,
-            boolean dumpHeader)
+            boolean dumpHeader,
+            AtomicInteger tokens)
             throws IOException {
         try (CloseableHttpClient client = getHttpClient(insecure, timeout)) {
             HttpUriRequest req =
@@ -74,6 +84,22 @@ public final class HttpClient {
                 }
                 System.out.println("< ");
             }
+            String body = null;
+            if (tokens != null) {
+                String contentType = resp.getFirstHeader("Content-Type").getValue();
+                if ("application/json".equals(contentType)) {
+                    body = EntityUtils.toString(resp.getEntity());
+                    List<Map<String, String>> list = GSON.fromJson(body, LIST_TYPE);
+                    for (Map<String, String> map : list) {
+                        String text = map.get("generated_text");
+                        if (text != null) {
+                            String[] token = text.split("\\s");
+                            tokens.addAndGet(token.length);
+                        }
+                    }
+                }
+            }
+
             if (code >= 300 && ps instanceof NullOutputStream) {
                 System.out.println(
                         "HTTP error ("
@@ -81,6 +107,8 @@ public final class HttpClient {
                                 + "): "
                                 + IOUtils.toString(
                                         resp.getEntity().getContent(), StandardCharsets.UTF_8));
+            } else if (body != null) {
+                ps.write(body.getBytes(StandardCharsets.UTF_8));
             } else {
                 try (InputStream is = resp.getEntity().getContent()) {
                     IOUtils.copy(is, ps);
