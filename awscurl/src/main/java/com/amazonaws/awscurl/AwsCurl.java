@@ -42,6 +42,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -122,6 +123,7 @@ public final class AwsCurl {
             int nRequests = config.getNumberOfRequests();
             final Queue<Long> queue = new ConcurrentLinkedQueue<>();
             final Queue<Long> errors = new ConcurrentLinkedQueue<>();
+            final AtomicInteger tokens = new AtomicInteger(0);
 
             ExecutorService executor = Executors.newFixedThreadPool(clients);
             ArrayList<Callable<Void>> tasks = new ArrayList<>(clients);
@@ -137,13 +139,13 @@ public final class AwsCurl {
                                                 insecure,
                                                 config.getConnectTimeout(),
                                                 os,
-                                                printHeader);
+                                                printHeader,
+                                                tokens);
                                 int code = resp.getStatusLine().getStatusCode();
                                 if (code >= 300) {
                                     errors.add(System.nanoTime() - begin);
                                     continue;
                                 }
-
                                 String token = getNextToken(resp.getFirstHeader(SM_CUSTOM_HEADER));
                                 int iteration = 0;
                                 while (token != null) {
@@ -157,7 +159,8 @@ public final class AwsCurl {
                                                     insecure,
                                                     config.getConnectTimeout(),
                                                     os,
-                                                    printHeader);
+                                                    printHeader,
+                                                    tokens);
                                     code = resp.getStatusLine().getStatusCode();
                                     if (code >= 300) {
                                         break;
@@ -217,6 +220,9 @@ public final class AwsCurl {
                     System.out.printf("P90: %.2f ms.%n", list.get(successReq * 9 / 10) / 1000000d);
                     System.out.printf(
                             "P99: %.2f ms.%n", list.get(successReq * 99 / 100) / 1000000d);
+                }
+                if (tokens.get() > 0) {
+                    System.out.printf("Token/s: %.2f/s%n", tokens.get() * 1000000000d / delta);
                 }
             }
         } catch (IOException | InterruptedException e) {
@@ -310,6 +316,7 @@ public final class AwsCurl {
         private boolean verbose;
         private int nRequests;
         private int clients;
+        private boolean countTokens;
 
         public Config(CommandLine cmd) {
             serviceName = cmd.getOptionValue("service");
@@ -361,6 +368,7 @@ public final class AwsCurl {
             } else {
                 clients = 1;
             }
+            countTokens = cmd.hasOption("tokens");
         }
 
         public static Options getOptions() {
@@ -524,6 +532,8 @@ public final class AwsCurl {
                             .hasArg()
                             .desc(" Concurrent clients")
                             .build());
+            options.addOption(
+                    Option.builder("t").longOpt("tokens").desc("Output token per seconds").build());
             return options;
         }
 
