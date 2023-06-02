@@ -1,6 +1,7 @@
 package com.amazonaws.awscurl;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +23,7 @@ public class SignableRequest {
     private byte[] content;
     private int timeOffset;
     private long signingTime;
+    private int inputTokens = -1;
 
     public SignableRequest(String serviceName, URI uri) {
         this.serviceName = serviceName;
@@ -172,6 +174,37 @@ public class SignableRequest {
         return content;
     }
 
+    public int getInputTokens() {
+        if (content == null) {
+            return 0;
+        }
+
+        if (inputTokens == -1) {
+            boolean isJson = false;
+            for (Map.Entry<String, String> entry : headers.entrySet()) {
+                if ("Content-Type".equalsIgnoreCase(entry.getKey())) {
+                    if ("application/json".equalsIgnoreCase(entry.getValue())) {
+                        isJson = true;
+                        break;
+                    }
+                }
+            }
+            if (isJson) {
+                String text = new String(content, StandardCharsets.UTF_8);
+                Input input = HttpClient.GSON.fromJson(text, Input.class);
+                if (input.inputs != null) {
+                    for (String item : input.inputs) {
+                        String[] token = item.split("\\s");
+                        inputTokens += token.length;
+                    }
+                }
+            } else {
+                inputTokens = 0;
+            }
+        }
+        return inputTokens;
+    }
+
     public void setContent(byte[] content) {
         this.content = content;
     }
@@ -198,5 +231,10 @@ public class SignableRequest {
         }
 
         return builder.toString();
+    }
+
+    private static final class Input {
+
+        List<String> inputs;
     }
 }

@@ -121,9 +121,11 @@ public final class AwsCurl {
 
             int clients = config.getClients();
             int nRequests = config.getNumberOfRequests();
-            final Queue<Long> queue = new ConcurrentLinkedQueue<>();
+            final List<Long> success = new ArrayList<>();
+            final List<Long> firstTokens = new ArrayList<>();
             final Queue<Long> errors = new ConcurrentLinkedQueue<>();
-            final AtomicInteger tokens = new AtomicInteger(0);
+            final AtomicInteger tokens = config.countTokens ? new AtomicInteger(0) : null;
+            final long[] firstTokenTime = {0L};
 
             ExecutorService executor = Executors.newFixedThreadPool(clients);
             ArrayList<Callable<Void>> tasks = new ArrayList<>(clients);
@@ -133,6 +135,7 @@ public final class AwsCurl {
                             for (int j = 0; j < nRequests; ++j) {
                                 request.sign();
                                 long begin = System.nanoTime();
+                                firstTokenTime[0] = 0L;
                                 HttpResponse resp =
                                         HttpClient.sendRequest(
                                                 request,
@@ -140,12 +143,17 @@ public final class AwsCurl {
                                                 config.getConnectTimeout(),
                                                 os,
                                                 printHeader,
-                                                tokens);
+                                                tokens,
+                                                firstTokenTime);
                                 int code = resp.getStatusLine().getStatusCode();
                                 if (code >= 300) {
                                     errors.add(System.nanoTime() - begin);
                                     continue;
                                 }
+                                if (firstTokenTime[0] > 0) {
+                                    firstTokens.add(firstTokenTime[0] - begin);
+                                }
+
                                 String token = getNextToken(resp.getFirstHeader(SM_CUSTOM_HEADER));
                                 int iteration = 0;
                                 while (token != null) {
@@ -160,7 +168,8 @@ public final class AwsCurl {
                                                     config.getConnectTimeout(),
                                                     os,
                                                     printHeader,
-                                                    tokens);
+                                                    tokens,
+                                                    firstTokenTime);
                                     code = resp.getStatusLine().getStatusCode();
                                     if (code >= 300) {
                                         break;
@@ -175,7 +184,7 @@ public final class AwsCurl {
                                 }
 
                                 if (code < 300) {
-                                    queue.add(System.nanoTime() - begin);
+                                    success.add(System.nanoTime() - begin);
                                 } else {
                                     errors.add(System.nanoTime() - begin);
                                 }
@@ -200,11 +209,10 @@ public final class AwsCurl {
 
             if (nRequests > 1 && clients > 0) {
                 int totalRequest = clients * nRequests;
-                int successReq = queue.size();
+                int successReq = success.size();
                 int errorReq = errors.size();
-                List<Long> list = new ArrayList<>(queue);
-                Collections.sort(list);
-                long totalTime = list.stream().mapToLong(val -> val).sum();
+                Collections.sort(success);
+                long totalTime = success.stream().mapToLong(val -> val).sum();
 
                 System.out.printf("Total time: %.2f ms.%n", delta / 1000000d);
                 System.out.printf(
@@ -214,15 +222,23 @@ public final class AwsCurl {
                 System.out.println("Total requests: " + totalRequest);
                 if (successReq > 0) {
                     System.out.printf("TPS: %.2f/s%n", successReq * 1000000000d / delta);
+                    if (tokens != null) {
+                        int totalTokens = tokens.get();
+                        System.out.printf("Total token: %d%n", totalTokens);
+                        System.out.printf("Token/s: %.2f/s%n", totalTokens * 1000000000d / delta);
+                    }
                     System.out.printf(
                             "Average Latency: %.2f ms.%n", totalTime / 1000000d / successReq);
-                    System.out.printf("P50: %.2f ms.%n", list.get(successReq / 2) / 1000000d);
-                    System.out.printf("P90: %.2f ms.%n", list.get(successReq * 9 / 10) / 1000000d);
+                    System.out.printf("P50: %.2f ms.%n", success.get(successReq / 2) / 1000000d);
                     System.out.printf(
-                            "P99: %.2f ms.%n", list.get(successReq * 99 / 100) / 1000000d);
+                            "P90: %.2f ms.%n", success.get(successReq * 9 / 10) / 1000000d);
+                    System.out.printf(
+                            "P99: %.2f ms.%n", success.get(successReq * 99 / 100) / 1000000d);
                 }
-                if (tokens.get() > 0) {
-                    System.out.printf("Token/s: %.2f/s%n", tokens.get() * 1000000000d / delta);
+                if (!firstTokens.isEmpty()) {
+                    long sum = firstTokens.stream().mapToLong(val -> val).sum();
+                    int size = firstTokens.size();
+                    System.out.printf("Average first bytes: %.2f ms.%n", sum / 1000000d / size);
                 }
             }
         } catch (IOException | InterruptedException e) {
