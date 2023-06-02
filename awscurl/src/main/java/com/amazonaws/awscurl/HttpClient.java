@@ -24,8 +24,10 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.lang.reflect.Type;
 import java.net.URI;
@@ -43,8 +45,9 @@ import javax.net.ssl.SSLContext;
 @SuppressWarnings("PMD.SystemPrintln")
 public final class HttpClient {
 
-    private static final Gson GSON = new Gson();
+    static final Gson GSON = new Gson();
     private static final Type LIST_TYPE = new TypeToken<List<Map<String, String>>>() {}.getType();
+    private static final Type MAP_TYPE = new TypeToken<Map<String, List<String>>>() {}.getType();
 
     private HttpClient() {}
 
@@ -54,7 +57,8 @@ public final class HttpClient {
             int timeout,
             OutputStream ps,
             boolean dumpHeader,
-            AtomicInteger tokens)
+            AtomicInteger tokens,
+            long[] firstToken)
             throws IOException {
         try (CloseableHttpClient client = getHttpClient(insecure, timeout)) {
             HttpUriRequest req =
@@ -84,21 +88,6 @@ public final class HttpClient {
                 }
                 System.out.println("< ");
             }
-            String body = null;
-            if (tokens != null) {
-                String contentType = resp.getFirstHeader("Content-Type").getValue();
-                if ("application/json".equals(contentType)) {
-                    body = EntityUtils.toString(resp.getEntity());
-                    List<Map<String, String>> list = GSON.fromJson(body, LIST_TYPE);
-                    for (Map<String, String> map : list) {
-                        String text = map.get("generated_text");
-                        if (text != null) {
-                            String[] token = text.split("\\s");
-                            tokens.addAndGet(token.length);
-                        }
-                    }
-                }
-            }
 
             if (code >= 300 && ps instanceof NullOutputStream) {
                 System.out.println(
@@ -107,13 +96,70 @@ public final class HttpClient {
                                 + "): "
                                 + IOUtils.toString(
                                         resp.getEntity().getContent(), StandardCharsets.UTF_8));
-            } else if (body != null) {
-                ps.write(body.getBytes(StandardCharsets.UTF_8));
-            } else {
-                try (InputStream is = resp.getEntity().getContent()) {
-                    IOUtils.copy(is, ps);
-                    ps.flush();
+                return resp;
+            }
+
+            if (tokens != null) {
+                Header header = resp.getFirstHeader("Content-Type");
+                String contentType = header == null ? null : header.getValue();
+                if ("application/json".equals(contentType)) {
+                    String body = EntityUtils.toString(resp.getEntity());
+                    ps.write(body.getBytes(StandardCharsets.UTF_8));
+
+                    List<Map<String, String>> list = GSON.fromJson(body, LIST_TYPE);
+                    for (Map<String, String> item : list) {
+                        String text = item.get("generated_text");
+                        if (text != null) {
+                            String[] token = text.split("\\s");
+                            tokens.addAndGet(token.length);
+                        }
+                    }
+                    if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
+                        tokens.addAndGet(-request.getInputTokens());
+                    }
+                    return resp;
+                } else if ("application/jsonlines".equals(contentType)) {
+                    InputStream is = resp.getEntity().getContent();
+                    try (BufferedReader reader =
+                            new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                        String line;
+                        List<StringBuffer> buffers = new ArrayList<>();
+                        while ((line = reader.readLine()) != null) {
+                            if (firstToken[0] == 0L) {
+                                firstToken[0] = System.nanoTime();
+                            }
+                            Map<String, List<String>> map = GSON.fromJson(line, MAP_TYPE);
+                            List<String> item = map.get("outputs");
+                            if (item != null) {
+                                if (buffers.isEmpty()) {
+                                    for (String s : item) {
+                                        buffers.add(new StringBuffer(s));
+                                    }
+                                } else {
+                                    for (int i = 0; i < item.size(); ++i) {
+                                        buffers.get(i).append(item.get(i));
+                                    }
+                                }
+                            }
+
+                            ps.write(line.getBytes(StandardCharsets.UTF_8));
+                            ps.write(new byte[] {'\n'});
+                        }
+                        for (StringBuffer item : buffers) {
+                            String[] token = item.toString().split("\\s");
+                            tokens.addAndGet(token.length);
+                        }
+                    }
+                    if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
+                        tokens.addAndGet(-request.getInputTokens());
+                    }
+                    return resp;
                 }
+            }
+
+            try (InputStream is = resp.getEntity().getContent()) {
+                IOUtils.copy(is, ps);
+                ps.flush();
             }
             return resp;
         }
