@@ -15,6 +15,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -45,6 +46,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 @SuppressWarnings("PMD.SystemPrintln")
 public final class AwsCurl {
@@ -83,11 +85,7 @@ public final class AwsCurl {
             }
 
             String serviceName = config.getServiceName();
-            SignableRequest request = new SignableRequest(serviceName, uri);
-            request.setContent(config.getRequestBody());
-            request.setHeaders(config.getRequestHeaders());
-            request.setHttpMethod(config.getRequestMethod());
-
+            AWS4Signer signer;
             if (serviceName != null) {
                 AWSCredentials credentials = AWSCredentials.getCredentials(config.getProfile());
                 if (credentials == null) {
@@ -110,9 +108,9 @@ public final class AwsCurl {
                         }
                     }
                 }
-
-                AWS4Signer signer = new AWS4Signer(serviceName, region, credentials);
-                request.setSigner(signer);
+                signer = new AWS4Signer(serviceName, region, credentials);
+            } else {
+                signer = null;
             }
 
             boolean insecure = config.isInsecure();
@@ -133,6 +131,11 @@ public final class AwsCurl {
                 tasks.add(
                         () -> {
                             for (int j = 0; j < nRequests; ++j) {
+                                SignableRequest request = new SignableRequest(serviceName, uri);
+                                request.setContent(config.getRequestBody());
+                                request.setHeaders(config.getRequestHeaders());
+                                request.setHttpMethod(config.getRequestMethod());
+                                request.setSigner(signer);
                                 request.sign();
                                 long begin = System.nanoTime();
                                 firstTokenTime[0] = 0L;
@@ -203,7 +206,7 @@ public final class AwsCurl {
                 try {
                     future.get();
                 } catch (ExecutionException e) {
-                    e.getCause().printStackTrace();
+                    e.getCause().printStackTrace(); // NOPMD
                 }
             }
 
@@ -333,8 +336,12 @@ public final class AwsCurl {
         private int nRequests;
         private int clients;
         private boolean countTokens;
+        private List<byte[]> dataset;
+        private AtomicInteger index;
 
-        public Config(CommandLine cmd) {
+        public Config(CommandLine cmd) throws IOException {
+            dataset = new ArrayList<>();
+            index = new AtomicInteger(0);
             serviceName = cmd.getOptionValue("service");
             region = cmd.getOptionValue("region");
             profile = cmd.getOptionValue("profile");
@@ -346,6 +353,10 @@ public final class AwsCurl {
                 }
             } catch (NumberFormatException e) {
                 connectTimeout = 30000;
+            }
+            String dataDirectory = cmd.getOptionValue("dataset");
+            if (dataDirectory != null) {
+                loadDataset(dataDirectory);
             }
             data = cmd.getOptionValues("data");
             dataRaw = cmd.getOptionValues("data-raw");
@@ -387,6 +398,33 @@ public final class AwsCurl {
             countTokens = cmd.hasOption("tokens");
         }
 
+        private void loadDataset(String dir) throws IOException {
+            Path path = Paths.get(dir);
+            if (Files.isDirectory(path)) {
+                System.out.println("Loading dataset from directory: " + path);
+                try (Stream<Path> stream = Files.list(path)) {
+                    stream.forEach(
+                            p -> {
+                                try {
+                                    if (Files.isRegularFile(path) && !Files.isHidden(path)) {
+                                        dataset.add(Files.readAllBytes(p));
+                                    }
+                                } catch (IOException e) {
+                                    throw new IllegalStateException(e);
+                                }
+                            });
+                }
+            } else {
+                System.out.println("Loading dataset from file: " + path);
+                try (BufferedReader reader = Files.newBufferedReader(path)) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        dataset.add(line.getBytes(StandardCharsets.UTF_8));
+                    }
+                }
+            }
+        }
+
         public static Options getOptions() {
             Options options = new Options();
             options.addOption(
@@ -421,6 +459,13 @@ public final class AwsCurl {
                             .hasArg()
                             .argName("SECONDS")
                             .desc("Maximum time allowed for connection")
+                            .build());
+            options.addOption(
+                    Option.builder()
+                            .longOpt("dataset")
+                            .hasArg()
+                            .argName("DIRECTORY")
+                            .desc("dataset directory")
                             .build());
             options.addOption(
                     Option.builder("d")
@@ -686,10 +731,16 @@ public final class AwsCurl {
 
             /*
              * Priority:
-             *  1. --form, --form-string
-             *  2. --data, --data-ascii, --data-binary, --data-raw, --data-urlencode
-             *  3. --upload-file
+             *  1. --dataset
+             *  2. --form, --form-string
+             *  3. --data, --data-ascii, --data-binary, --data-raw, --data-urlencode
+             *  4. --upload-file
              */
+            if (!dataset.isEmpty()) {
+                int i = index.incrementAndGet() % dataset.size();
+                return dataset.get(i);
+            }
+
             if (form != null || formString != null) {
                 requestMethod = requestMethod == null ? "POST" : requestMethod;
                 MultipartEntityBuilder mb = MultipartEntityBuilder.create();
