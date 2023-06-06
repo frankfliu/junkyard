@@ -119,8 +119,8 @@ public final class AwsCurl {
 
             int clients = config.getClients();
             int nRequests = config.getNumberOfRequests();
-            final List<Long> success = new ArrayList<>();
-            final List<Long> firstTokens = new ArrayList<>();
+            final List<Long> success = Collections.synchronizedList(new ArrayList<>());
+            final List<Long> firstTokens = Collections.synchronizedList(new ArrayList<>());
             final Queue<Long> errors = new ConcurrentLinkedQueue<>();
             final AtomicInteger tokens = config.countTokens ? new AtomicInteger(0) : null;
             final long[] firstTokenTime = {0L};
