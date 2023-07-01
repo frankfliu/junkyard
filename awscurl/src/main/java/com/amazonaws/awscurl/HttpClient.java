@@ -102,7 +102,17 @@ public final class HttpClient {
             if (tokens != null) {
                 Header header = resp.getFirstHeader("Content-Type");
                 String contentType = header == null ? null : header.getValue();
-                if ("application/json".equals(contentType)) {
+                if (contentType == null || "text/plain".equals(contentType)) {
+                    String body = EntityUtils.toString(resp.getEntity());
+                    ps.write(body.getBytes(StandardCharsets.UTF_8));
+
+                    String[] token = body.split("\\s");
+                    tokens.addAndGet(token.length);
+                    if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
+                        tokens.addAndGet(-request.getInputTokens());
+                    }
+                    return resp;
+                } else if ("application/json".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
 
