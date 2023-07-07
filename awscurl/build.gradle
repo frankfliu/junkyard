@@ -3,6 +3,11 @@ plugins {
 }
 
 dependencies {
+    implementation platform("ai.djl:bom:0.22.1")
+    implementation ("ai.djl.huggingface:tokenizers") {
+        exclude group: "org.apache.commons", module: "commons-compress"
+    }
+    implementation "org.slf4j:slf4j-nop:2.0.7"
     implementation "commons-cli:commons-cli:1.5.0"
     implementation "commons-codec:commons-codec:1.15"
     implementation "commons-io:commons-io:2.11.0"
@@ -18,9 +23,14 @@ jar {
         attributes 'Main-Class': 'com.amazonaws.awscurl.AwsCurl'
     }
     includeEmptyDirs = false
-    from configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-
-    exclude 'META-INF/**'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from configurations.runtimeClasspath.collect {
+        it.isDirectory() ? it : zipTree(it).matching {
+            exclude "**/*.so"
+            exclude "**/*.dylib"
+            exclude "**/*.dll"
+        }
+    }
 }
 
 jar.doLast {
