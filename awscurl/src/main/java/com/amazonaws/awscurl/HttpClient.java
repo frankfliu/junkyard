@@ -1,5 +1,9 @@
 package com.amazonaws.awscurl;
 
+import ai.djl.engine.EngineException;
+import ai.djl.huggingface.tokenizers.Encoding;
+import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
@@ -36,6 +40,9 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,6 +60,7 @@ public final class HttpClient {
     static final Gson GSON = new Gson();
     private static final Type LIST_TYPE = new TypeToken<List<Map<String, String>>>() {}.getType();
     private static final Type MAP_TYPE = new TypeToken<Map<String, List<String>>>() {}.getType();
+    private static final HuggingFaceTokenizer tokenizer = getTokenizer();
 
     private HttpClient() {}
 
@@ -160,6 +168,32 @@ public final class HttpClient {
         }
     }
 
+    private static HuggingFaceTokenizer getTokenizer() {
+        HuggingFaceTokenizer.Builder builder = HuggingFaceTokenizer.builder();
+        String name = System.getenv("TOKENIZER");
+        if (name != null) {
+            Path path = Paths.get(name);
+            if (Files.exists(path)) {
+                builder.optTokenizerPath(path);
+            } else {
+                builder.optTokenizerName(name);
+            }
+            try {
+                return builder.build();
+            } catch (EngineException ignore) {
+                System.out.println(
+                        "No tokenizer cache found. Please unset environment variable TOKENIZER.");
+            } catch (Exception e) {
+                System.out.println(
+                        "Invalid tokenizer: "
+                                + name
+                                + ", please unset environment variable TOKENIZER if don't want to"
+                                + " use tokenizer");
+            }
+        }
+        return null;
+    }
+
     private static void handleEventStream(
             InputStream is, List<StringBuilder> list, long[] firstToken, OutputStream ps)
             throws IOException {
@@ -226,8 +260,13 @@ public final class HttpClient {
     private static void countTokens(
             List<? extends CharSequence> list, AtomicInteger tokens, SignableRequest request) {
         for (CharSequence item : list) {
-            String[] token = item.toString().split("\\s");
-            tokens.addAndGet(token.length);
+            if (tokenizer != null) {
+                Encoding encoding = tokenizer.encode(item.toString());
+                tokens.addAndGet(encoding.getIds().length);
+            } else {
+                String[] token = item.toString().split("\\s");
+                tokens.addAndGet(token.length);
+            }
         }
         if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
             tokens.addAndGet(-request.getInputTokens());

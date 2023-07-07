@@ -227,8 +227,11 @@ public final class AwsCurl {
                     System.out.printf("TPS: %.2f/s%n", successReq * 1000000000d / delta);
                     if (tokens != null) {
                         int totalTokens = tokens.get();
-                        System.out.printf("Total token: %d%n", totalTokens);
-                        System.out.printf("Token/s: %.2f/s%n", totalTokens * 1000000000d / delta);
+                        String tokenizer = System.getenv("TOKENIZER");
+                        String n = tokenizer == null ? "word" : "token";
+                        System.out.printf("Total %s: %d%n", n, totalTokens);
+                        System.out.printf("%s/req: %d%n", n, totalTokens / totalRequest);
+                        System.out.printf("%s/s: %.2f/s%n", n, totalTokens * 1000000000d / delta);
                     }
                     System.out.printf(
                             "Average Latency: %.2f ms.%n", totalTime / 1000000d / successReq);
