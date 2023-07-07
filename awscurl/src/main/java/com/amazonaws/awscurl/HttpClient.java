@@ -1,6 +1,7 @@
 package com.amazonaws.awscurl;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 
 import org.apache.commons.io.IOUtils;
@@ -25,15 +26,19 @@ import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
 
 import java.io.BufferedReader;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.lang.reflect.Type;
 import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,79 +104,133 @@ public final class HttpClient {
                 return resp;
             }
 
+            Header header = resp.getFirstHeader("Content-Type");
+            String contentType = header == null ? null : header.getValue();
             if (tokens != null) {
-                Header header = resp.getFirstHeader("Content-Type");
-                String contentType = header == null ? null : header.getValue();
                 if (contentType == null || "text/plain".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
-
-                    String[] token = body.split("\\s");
-                    tokens.addAndGet(token.length);
-                    if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
-                        tokens.addAndGet(-request.getInputTokens());
-                    }
+                    countTokens(Collections.singletonList(body), tokens, request);
                     return resp;
                 } else if ("application/json".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
 
                     List<Map<String, String>> list = GSON.fromJson(body, LIST_TYPE);
+                    List<String> lines = new ArrayList<>();
                     for (Map<String, String> item : list) {
                         String text = item.get("generated_text");
                         if (text != null) {
-                            String[] token = text.split("\\s");
-                            tokens.addAndGet(token.length);
+                            lines.add(text);
                         }
                     }
-                    if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
-                        tokens.addAndGet(-request.getInputTokens());
-                    }
+                    countTokens(lines, tokens, request);
                     return resp;
                 } else if ("application/jsonlines".equals(contentType)) {
                     InputStream is = resp.getEntity().getContent();
                     try (BufferedReader reader =
                             new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
                         String line;
-                        List<StringBuffer> buffers = new ArrayList<>();
+                        List<StringBuilder> list = new ArrayList<>();
                         while ((line = reader.readLine()) != null) {
-                            if (firstToken[0] == 0L) {
-                                firstToken[0] = System.nanoTime();
-                            }
-                            Map<String, List<String>> map = GSON.fromJson(line, MAP_TYPE);
-                            List<String> item = map.get("outputs");
-                            if (item != null) {
-                                if (buffers.isEmpty()) {
-                                    for (String s : item) {
-                                        buffers.add(new StringBuffer(s));
-                                    }
-                                } else {
-                                    for (int i = 0; i < item.size(); ++i) {
-                                        buffers.get(i).append(item.get(i));
-                                    }
-                                }
-                            }
-
-                            ps.write(line.getBytes(StandardCharsets.UTF_8));
-                            ps.write(new byte[] {'\n'});
+                            processJsonLine(list, firstToken, ps, line);
                         }
-                        for (StringBuffer item : buffers) {
-                            String[] token = item.toString().split("\\s");
-                            tokens.addAndGet(token.length);
-                        }
+                        countTokens(list, tokens, request);
                     }
-                    if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
-                        tokens.addAndGet(-request.getInputTokens());
-                    }
+                    return resp;
+                } else if ("application/vnd.amazon.eventstream".equals(contentType)) {
+                    List<StringBuilder> list = new ArrayList<>();
+                    InputStream is = resp.getEntity().getContent();
+                    handleEventStream(is, list, firstToken, ps);
+                    countTokens(list, tokens, request);
                     return resp;
                 }
             }
 
             try (InputStream is = resp.getEntity().getContent()) {
-                IOUtils.copy(is, ps);
-                ps.flush();
+                if ("application/vnd.amazon.eventstream".equals(contentType)) {
+                    List<StringBuilder> list = new ArrayList<>();
+                    handleEventStream(is, list, firstToken, ps);
+                } else {
+                    IOUtils.copy(is, ps);
+                    ps.flush();
+                }
             }
             return resp;
+        }
+    }
+
+    private static void handleEventStream(
+            InputStream is, List<StringBuilder> list, long[] firstToken, OutputStream ps)
+            throws IOException {
+        byte[] buf = new byte[12];
+        byte[] payload = new byte[512];
+        while (true) {
+            try {
+                IOUtils.readFully(is, buf);
+                ByteBuffer bb = ByteBuffer.wrap(buf);
+                bb.order(ByteOrder.BIG_ENDIAN);
+                int totalLength = bb.getInt();
+                int headerLength = bb.getInt();
+                int payloadLength = totalLength - headerLength - 12 - 4;
+                int size = totalLength - 12;
+                if (size > payload.length) {
+                    payload = new byte[size];
+                }
+                IOUtils.readFully(is, payload, 0, size);
+                if (payloadLength == 0) {
+                    break;
+                }
+                String line =
+                        new String(payload, headerLength, payloadLength, StandardCharsets.UTF_8)
+                                .trim();
+                processJsonLine(list, firstToken, ps, line);
+            } catch (EOFException e) {
+                break;
+            }
+        }
+    }
+
+    private static void processJsonLine(
+            List<StringBuilder> list, long[] firstToken, OutputStream ps, String line)
+            throws IOException {
+        boolean first = firstToken[0] == 0L;
+        if (first) {
+            firstToken[0] = System.nanoTime();
+        }
+        try {
+            Map<String, List<String>> map = GSON.fromJson(line, MAP_TYPE);
+            List<String> item = map.get("outputs");
+            if (item != null) {
+                if (list.isEmpty()) {
+                    for (String s : item) {
+                        list.add(new StringBuilder(s));
+                    }
+                } else {
+                    for (int i = 0; i < item.size(); ++i) {
+                        list.get(i).append(item.get(i));
+                    }
+                }
+            }
+        } catch (JsonParseException e) {
+            if (first) {
+                System.out.println("Invalid json line: " + line);
+            }
+            list.add(new StringBuilder(line));
+        }
+
+        ps.write(line.getBytes(StandardCharsets.UTF_8));
+        ps.write(new byte[] {'\n'});
+    }
+
+    private static void countTokens(
+            List<? extends CharSequence> list, AtomicInteger tokens, SignableRequest request) {
+        for (CharSequence item : list) {
+            String[] token = item.toString().split("\\s");
+            tokens.addAndGet(token.length);
+        }
+        if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
+            tokens.addAndGet(-request.getInputTokens());
         }
     }
 
