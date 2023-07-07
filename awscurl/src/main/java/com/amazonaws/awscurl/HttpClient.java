@@ -1,8 +1,11 @@
 package com.amazonaws.awscurl;
 
-import ai.djl.engine.EngineException;
+import ai.djl.engine.Engine;
 import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
+import ai.djl.training.util.DownloadUtils;
+import ai.djl.util.Platform;
+import ai.djl.util.Utils;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
@@ -37,6 +40,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.lang.reflect.Type;
 import java.net.URI;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -169,6 +173,32 @@ public final class HttpClient {
     }
 
     private static HuggingFaceTokenizer getTokenizer() {
+        try {
+            Path cacheDir = Utils.getEngineCacheDir("tokenizers");
+            Platform platform = Platform.detectPlatform("tokenizers");
+            String classifier = platform.getClassifier();
+            String version = platform.getVersion();
+            Path dir = cacheDir.resolve(version + '-' + classifier);
+            String libName = System.mapLibraryName("tokenizers");
+            Path path = dir.resolve(libName);
+            if (!Files.exists(path)) {
+                Files.createDirectories(dir);
+                String djlVersion = Engine.getDjlVersion();
+                String url =
+                        "https://publish.djl.ai/tokenizers/"
+                                + version.split("-")[0]
+                                + "/jnilib/"
+                                + djlVersion
+                                + '/'
+                                + classifier
+                                + '/'
+                                + libName;
+                DownloadUtils.download(new URL(url), path, null);
+            }
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to load HuggingFace tokenizer.", e);
+        }
+
         HuggingFaceTokenizer.Builder builder = HuggingFaceTokenizer.builder();
         String name = System.getenv("TOKENIZER");
         if (name != null) {
@@ -180,9 +210,6 @@ public final class HttpClient {
             }
             try {
                 return builder.build();
-            } catch (EngineException ignore) {
-                System.out.println(
-                        "No tokenizer cache found. Please unset environment variable TOKENIZER.");
             } catch (Exception e) {
                 System.out.println(
                         "Invalid tokenizer: "

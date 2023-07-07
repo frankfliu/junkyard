@@ -35,10 +35,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -56,6 +54,10 @@ public final class AwsCurl {
     private AwsCurl() {}
 
     public static void main(String[] args) {
+        String logLevel = System.getProperty("org.slf4j.simpleLogger.defaultLogLevel");
+        if (logLevel == null) {
+            System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "off");
+        }
         String jarName = getJarName();
 
         Options options = Config.getOptions();
@@ -121,7 +123,7 @@ public final class AwsCurl {
             int nRequests = config.getNumberOfRequests();
             final List<Long> success = Collections.synchronizedList(new ArrayList<>());
             final List<Long> firstTokens = Collections.synchronizedList(new ArrayList<>());
-            final Queue<Long> errors = new ConcurrentLinkedQueue<>();
+            final AtomicInteger errors = new AtomicInteger();
             final AtomicInteger tokens = config.countTokens ? new AtomicInteger(0) : null;
             final long[] firstTokenTime = {0L};
 
@@ -150,7 +152,7 @@ public final class AwsCurl {
                                                 firstTokenTime);
                                 int code = resp.getStatusLine().getStatusCode();
                                 if (code >= 300) {
-                                    errors.add(System.nanoTime() - begin);
+                                    errors.getAndIncrement();
                                     continue;
                                 }
                                 if (firstTokenTime[0] > 0) {
@@ -189,7 +191,7 @@ public final class AwsCurl {
                                 if (code < 300) {
                                     success.add(System.nanoTime() - begin);
                                 } else {
-                                    errors.add(System.nanoTime() - begin);
+                                    errors.getAndIncrement();
                                 }
                             }
                             return null;
@@ -207,13 +209,17 @@ public final class AwsCurl {
                     future.get();
                 } catch (ExecutionException e) {
                     e.getCause().printStackTrace(); // NOPMD
+                    errors.getAndIncrement();
                 }
             }
 
             if (nRequests > 1 && clients > 0) {
-                int totalRequest = clients * nRequests;
                 int successReq = success.size();
-                int errorReq = errors.size();
+                int errorReq = errors.get();
+                int totalRequest = successReq + errorReq;
+                if (totalRequest == 0) {
+                    totalRequest = 1;
+                }
                 Collections.sort(success);
                 long totalTime = success.stream().mapToLong(val -> val).sum();
 
