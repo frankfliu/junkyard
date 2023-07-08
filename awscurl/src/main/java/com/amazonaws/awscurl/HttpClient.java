@@ -187,7 +187,7 @@ public final class HttpClient {
             Path path = dir.resolve(libName);
             if (!Files.exists(path)) {
                 Files.createDirectories(dir);
-                String djlVersion = Engine.getDjlVersion();
+                String djlVersion = Engine.getDjlVersion().replaceAll("-SNAPSHOT", "");
                 String url =
                         "https://publish.djl.ai/tokenizers/"
                                 + version.split("-")[0]
