@@ -8,6 +8,9 @@ import ai.djl.util.Platform;
 import ai.djl.util.Utils;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 
@@ -66,7 +69,6 @@ public final class HttpClient {
     private static final Logger logger = LoggerFactory.getLogger(HttpClient.class);
 
     static final Gson GSON = new Gson();
-    private static final Type LIST_TYPE = new TypeToken<List<Map<String, String>>>() {}.getType();
     private static final Type MAP_TYPE = new TypeToken<Map<String, List<String>>>() {}.getType();
     private static final HuggingFaceTokenizer tokenizer = getTokenizer();
 
@@ -132,14 +134,9 @@ public final class HttpClient {
                     String body = EntityUtils.toString(resp.getEntity());
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
 
-                    List<Map<String, String>> list = GSON.fromJson(body, LIST_TYPE);
+                    JsonElement element = GSON.fromJson(body, JsonElement.class);
                     List<String> lines = new ArrayList<>();
-                    for (Map<String, String> item : list) {
-                        String text = item.get("generated_text");
-                        if (text != null) {
-                            lines.add(text);
-                        }
-                    }
+                    getJsonList(element, lines);
                     countTokens(lines, tokens, request);
                     return resp;
                 } else if ("application/jsonlines".equals(contentType)) {
@@ -173,6 +170,38 @@ public final class HttpClient {
                 }
             }
             return resp;
+        }
+    }
+
+    public static void getJsonList(JsonElement element, List<String> list) {
+        if (element.isJsonArray()) {
+            JsonArray array = element.getAsJsonArray();
+            for (int i = 0; i < array.size(); ++i) {
+                getJsonList(array.get(i), list);
+            }
+        } else if (element.isJsonObject()) {
+            JsonObject obj = element.getAsJsonObject();
+            JsonElement e = obj.get("generated_text");
+            if (e != null) {
+                if (e.isJsonPrimitive()) {
+                    list.add(e.getAsString());
+                } else if (e.isJsonArray()) {
+                    JsonArray array = element.getAsJsonArray();
+                    for (int i = 0; i < array.size(); ++i) {
+                        JsonElement text = array.get(i);
+                        if (text.isJsonPrimitive()) {
+                            list.add(text.getAsString());
+                        } else {
+                            logger.debug("Ignore element: {}", text);
+                        }
+                    }
+                } else {
+                    logger.debug("Ignore element: {}", e);
+                }
+            }
+
+        } else {
+            logger.debug("Ignore element: {}", element);
         }
     }
 
