@@ -31,6 +31,8 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.EOFException;
@@ -60,6 +62,8 @@ import javax.net.ssl.SSLContext;
 
 @SuppressWarnings("PMD.SystemPrintln")
 public final class HttpClient {
+
+    private static final Logger logger = LoggerFactory.getLogger(HttpClient.class);
 
     static final Gson GSON = new Gson();
     private static final Type LIST_TYPE = new TypeToken<List<Map<String, String>>>() {}.getType();
@@ -211,6 +215,7 @@ public final class HttpClient {
             try {
                 return builder.build();
             } catch (Exception e) {
+                logger.warn("", e);
                 System.out.println(
                         "Invalid tokenizer: "
                                 + name
