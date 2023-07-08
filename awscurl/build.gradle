@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    implementation platform("ai.djl:bom:0.22.1")
+    implementation platform("ai.djl:bom:0.23.0-SNAPSHOT")
     implementation ("ai.djl.huggingface:tokenizers") {
         exclude group: "org.apache.commons", module: "commons-compress"
     }
