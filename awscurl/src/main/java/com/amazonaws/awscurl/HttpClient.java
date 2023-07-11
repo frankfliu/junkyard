@@ -18,6 +18,8 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
+import org.apache.http.HttpVersion;
+import org.apache.http.StatusLine;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
@@ -32,6 +34,8 @@ import org.apache.http.conn.ssl.TrustAllStrategy;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicHttpResponse;
+import org.apache.http.message.BasicStatusLine;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
@@ -141,14 +145,19 @@ public final class HttpClient {
                     return resp;
                 } else if ("application/jsonlines".equals(contentType)) {
                     InputStream is = resp.getEntity().getContent();
+                    boolean hasError = false;
                     try (BufferedReader reader =
                             new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
                         String line;
                         List<StringBuilder> list = new ArrayList<>();
                         while ((line = reader.readLine()) != null) {
-                            processJsonLine(list, firstToken, ps, line);
+                            hasError = processJsonLine(list, firstToken, ps, line) || hasError;
                         }
                         countTokens(list, tokens, request);
+                    }
+                    if (hasError) {
+                        StatusLine status = new BasicStatusLine(HttpVersion.HTTP_1_1, 500, "error");
+                        return new BasicHttpResponse(status);
                     }
                     return resp;
                 } else if ("application/vnd.amazon.eventstream".equals(contentType)) {
@@ -279,16 +288,19 @@ public final class HttpClient {
                 String line =
                         new String(payload, headerLength, payloadLength, StandardCharsets.UTF_8)
                                 .trim();
-                processJsonLine(list, firstToken, ps, line);
+                if (processJsonLine(list, firstToken, ps, line)) {
+                    throw new IOException("Response contains error");
+                }
             } catch (EOFException e) {
                 break;
             }
         }
     }
 
-    private static void processJsonLine(
+    private static boolean processJsonLine(
             List<StringBuilder> list, long[] firstToken, OutputStream ps, String line)
             throws IOException {
+        boolean hasError = false;
         boolean first = firstToken[0] == 0L;
         if (first) {
             firstToken[0] = System.nanoTime();
@@ -311,11 +323,12 @@ public final class HttpClient {
             if (first) {
                 System.out.println("Invalid json line: " + line);
             }
-            list.add(new StringBuilder(line));
+            hasError = true;
         }
 
         ps.write(line.getBytes(StandardCharsets.UTF_8));
         ps.write(new byte[] {'\n'});
+        return hasError;
     }
 
     private static void countTokens(
