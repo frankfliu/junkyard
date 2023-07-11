@@ -125,13 +125,13 @@ public final class AwsCurl {
             final List<Long> firstTokens = Collections.synchronizedList(new ArrayList<>());
             final AtomicInteger errors = new AtomicInteger();
             final AtomicInteger tokens = config.countTokens ? new AtomicInteger(0) : null;
-            final long[] firstTokenTime = {0L};
 
             ExecutorService executor = Executors.newFixedThreadPool(clients);
             ArrayList<Callable<Void>> tasks = new ArrayList<>(clients);
             for (int i = 0; i < clients; ++i) {
                 tasks.add(
                         () -> {
+                            long[] firstTokenTime = {0L};
                             for (int j = 0; j < nRequests; ++j) {
                                 SignableRequest request = new SignableRequest(serviceName, uri);
                                 request.setContent(config.getRequestBody());
