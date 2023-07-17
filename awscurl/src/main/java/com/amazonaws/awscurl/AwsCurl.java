@@ -77,6 +77,10 @@ public final class AwsCurl {
                 return;
             }
             Config config = new Config(cmd);
+            if (config.isVerbose()) {
+                System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "debug");
+            }
+
             String url = config.getUrl(cmdArgs.get(0));
             URI uri;
             try {
