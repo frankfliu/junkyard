@@ -191,7 +191,7 @@ public class SignableRequest {
             }
             if (isJson) {
                 String text = new String(content, StandardCharsets.UTF_8);
-                Input input = HttpClient.GSON.fromJson(text, Input.class);
+                Input input = JsonUtils.GSON.fromJson(text, Input.class);
                 if (input.inputs != null) {
                     for (String item : input.inputs) {
                         String[] token = item.split("\\s");
