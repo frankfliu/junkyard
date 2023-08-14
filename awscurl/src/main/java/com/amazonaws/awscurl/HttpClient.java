@@ -1,18 +1,6 @@
 package com.amazonaws.awscurl;
 
-import ai.djl.engine.Engine;
-import ai.djl.huggingface.tokenizers.Encoding;
-import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
-import ai.djl.training.util.DownloadUtils;
-import ai.djl.util.Platform;
-import ai.djl.util.Utils;
-
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
-import com.google.gson.reflect.TypeToken;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.NullOutputStream;
@@ -38,8 +26,6 @@ import org.apache.http.message.BasicHttpResponse;
 import org.apache.http.message.BasicStatusLine;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.EOFException;
@@ -47,15 +33,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.lang.reflect.Type;
 import java.net.URI;
-import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -70,12 +51,6 @@ import javax.net.ssl.SSLContext;
 @SuppressWarnings("PMD.SystemPrintln")
 public final class HttpClient {
 
-    private static final Logger logger = LoggerFactory.getLogger(HttpClient.class);
-
-    static final Gson GSON = new Gson();
-    private static final Type MAP_TYPE = new TypeToken<Map<String, List<String>>>() {}.getType();
-    private static final HuggingFaceTokenizer tokenizer = getTokenizer();
-
     private HttpClient() {}
 
     public static HttpResponse sendRequest(
@@ -85,7 +60,8 @@ public final class HttpClient {
             OutputStream ps,
             boolean dumpHeader,
             AtomicInteger tokens,
-            long[] firstToken)
+            long[] firstToken,
+            String jsonExpression)
             throws IOException {
         try (CloseableHttpClient client = getHttpClient(insecure, timeout)) {
             HttpUriRequest req =
@@ -132,16 +108,16 @@ public final class HttpClient {
                 if (contentType == null || "text/plain".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
-                    countTokens(Collections.singletonList(body), tokens, request);
+                    TokenUtils.countTokens(Collections.singletonList(body), tokens, request);
                     return resp;
                 } else if ("application/json".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
 
-                    JsonElement element = GSON.fromJson(body, JsonElement.class);
+                    JsonElement element = JsonUtils.GSON.fromJson(body, JsonElement.class);
                     List<String> lines = new ArrayList<>();
-                    getJsonList(element, lines);
-                    countTokens(lines, tokens, request);
+                    JsonUtils.getJsonList(element, lines, jsonExpression);
+                    TokenUtils.countTokens(lines, tokens, request);
                     return resp;
                 } else if ("application/jsonlines".equals(contentType)) {
                     InputStream is = resp.getEntity().getContent();
@@ -151,9 +127,12 @@ public final class HttpClient {
                         String line;
                         List<StringBuilder> list = new ArrayList<>();
                         while ((line = reader.readLine()) != null) {
-                            hasError = processJsonLine(list, firstToken, ps, line) || hasError;
+                            hasError =
+                                    JsonUtils.processJsonLine(
+                                                    list, firstToken, ps, line, jsonExpression)
+                                            || hasError;
                         }
-                        countTokens(list, tokens, request);
+                        TokenUtils.countTokens(list, tokens, request);
                     }
                     if (hasError) {
                         StatusLine status = new BasicStatusLine(HttpVersion.HTTP_1_1, 500, "error");
@@ -163,8 +142,8 @@ public final class HttpClient {
                 } else if ("application/vnd.amazon.eventstream".equals(contentType)) {
                     List<StringBuilder> list = new ArrayList<>();
                     InputStream is = resp.getEntity().getContent();
-                    handleEventStream(is, list, firstToken, ps);
-                    countTokens(list, tokens, request);
+                    handleEventStream(is, list, firstToken, jsonExpression, ps);
+                    TokenUtils.countTokens(list, tokens, request);
                     return resp;
                 }
             }
@@ -172,7 +151,7 @@ public final class HttpClient {
             try (InputStream is = resp.getEntity().getContent()) {
                 if ("application/vnd.amazon.eventstream".equals(contentType)) {
                     List<StringBuilder> list = new ArrayList<>();
-                    handleEventStream(is, list, firstToken, ps);
+                    handleEventStream(is, list, firstToken, jsonExpression, ps);
                 } else {
                     IOUtils.copy(is, ps);
                     ps.flush();
@@ -182,90 +161,12 @@ public final class HttpClient {
         }
     }
 
-    public static void getJsonList(JsonElement element, List<String> list) {
-        if (element.isJsonArray()) {
-            JsonArray array = element.getAsJsonArray();
-            for (int i = 0; i < array.size(); ++i) {
-                getJsonList(array.get(i), list);
-            }
-        } else if (element.isJsonObject()) {
-            JsonObject obj = element.getAsJsonObject();
-            JsonElement e = obj.get("generated_text");
-            if (e != null) {
-                if (e.isJsonPrimitive()) {
-                    list.add(e.getAsString());
-                } else if (e.isJsonArray()) {
-                    JsonArray array = element.getAsJsonArray();
-                    for (int i = 0; i < array.size(); ++i) {
-                        JsonElement text = array.get(i);
-                        if (text.isJsonPrimitive()) {
-                            list.add(text.getAsString());
-                        } else {
-                            logger.debug("Ignore element: {}", text);
-                        }
-                    }
-                } else {
-                    logger.debug("Ignore element: {}", e);
-                }
-            }
-
-        } else {
-            logger.debug("Ignore element: {}", element);
-        }
-    }
-
-    private static HuggingFaceTokenizer getTokenizer() {
-        try {
-            Path cacheDir = Utils.getEngineCacheDir("tokenizers");
-            Platform platform = Platform.detectPlatform("tokenizers");
-            String classifier = platform.getClassifier();
-            String version = platform.getVersion();
-            Path dir = cacheDir.resolve(version + '-' + classifier);
-            String libName = System.mapLibraryName("tokenizers");
-            Path path = dir.resolve(libName);
-            if (!Files.exists(path)) {
-                Files.createDirectories(dir);
-                String djlVersion = Engine.getDjlVersion().replaceAll("-SNAPSHOT", "");
-                String url =
-                        "https://publish.djl.ai/tokenizers/"
-                                + version.split("-")[0]
-                                + "/jnilib/"
-                                + djlVersion
-                                + '/'
-                                + classifier
-                                + '/'
-                                + libName;
-                DownloadUtils.download(new URL(url), path, null);
-            }
-        } catch (IOException e) {
-            throw new IllegalArgumentException("Failed to load HuggingFace tokenizer.", e);
-        }
-
-        HuggingFaceTokenizer.Builder builder = HuggingFaceTokenizer.builder();
-        String name = System.getenv("TOKENIZER");
-        if (name != null) {
-            Path path = Paths.get(name);
-            if (Files.exists(path)) {
-                builder.optTokenizerPath(path);
-            } else {
-                builder.optTokenizerName(name);
-            }
-            try {
-                return builder.build();
-            } catch (Exception e) {
-                logger.warn("", e);
-                System.out.println(
-                        "Invalid tokenizer: "
-                                + name
-                                + ", please unset environment variable TOKENIZER if don't want to"
-                                + " use tokenizer");
-            }
-        }
-        return null;
-    }
-
     private static void handleEventStream(
-            InputStream is, List<StringBuilder> list, long[] firstToken, OutputStream ps)
+            InputStream is,
+            List<StringBuilder> list,
+            long[] firstToken,
+            String jsonExpression,
+            OutputStream ps)
             throws IOException {
         byte[] buf = new byte[12];
         byte[] payload = new byte[512];
@@ -288,62 +189,12 @@ public final class HttpClient {
                 String line =
                         new String(payload, headerLength, payloadLength, StandardCharsets.UTF_8)
                                 .trim();
-                if (processJsonLine(list, firstToken, ps, line)) {
+                if (JsonUtils.processJsonLine(list, firstToken, ps, line, jsonExpression)) {
                     throw new IOException("Response contains error");
                 }
             } catch (EOFException e) {
                 break;
             }
-        }
-    }
-
-    private static boolean processJsonLine(
-            List<StringBuilder> list, long[] firstToken, OutputStream ps, String line)
-            throws IOException {
-        boolean hasError = false;
-        boolean first = firstToken[0] == 0L;
-        if (first) {
-            firstToken[0] = System.nanoTime();
-        }
-        try {
-            Map<String, List<String>> map = GSON.fromJson(line, MAP_TYPE);
-            List<String> item = map.get("outputs");
-            if (item != null) {
-                if (list.isEmpty()) {
-                    for (String s : item) {
-                        list.add(new StringBuilder(s));
-                    }
-                } else {
-                    for (int i = 0; i < item.size(); ++i) {
-                        list.get(i).append(item.get(i));
-                    }
-                }
-            }
-        } catch (JsonParseException e) {
-            if (first) {
-                System.out.println("Invalid json line: " + line);
-            }
-            hasError = true;
-        }
-
-        ps.write(line.getBytes(StandardCharsets.UTF_8));
-        ps.write(new byte[] {'\n'});
-        return hasError;
-    }
-
-    private static void countTokens(
-            List<? extends CharSequence> list, AtomicInteger tokens, SignableRequest request) {
-        for (CharSequence item : list) {
-            if (tokenizer != null) {
-                Encoding encoding = tokenizer.encode(item.toString());
-                tokens.addAndGet(encoding.getIds().length);
-            } else {
-                String[] token = item.toString().split("\\s");
-                tokens.addAndGet(token.length);
-            }
-        }
-        if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
-            tokens.addAndGet(-request.getInputTokens());
         }
     }
 

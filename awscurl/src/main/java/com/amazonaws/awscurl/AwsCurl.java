@@ -14,6 +14,8 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -48,6 +50,8 @@ import java.util.stream.Stream;
 
 @SuppressWarnings("PMD.SystemPrintln")
 public final class AwsCurl {
+
+    private static final Logger logger = LoggerFactory.getLogger(AwsCurl.class);
 
     private static final String SM_CUSTOM_HEADER = "X-Amzn-SageMaker-Custom-Attributes";
 
@@ -153,7 +157,8 @@ public final class AwsCurl {
                                                 os,
                                                 printHeader,
                                                 tokens,
-                                                firstTokenTime);
+                                                firstTokenTime,
+                                                config.getJsonExpression());
                                 int code = resp.getStatusLine().getStatusCode();
                                 if (code >= 300) {
                                     errors.getAndIncrement();
@@ -178,7 +183,8 @@ public final class AwsCurl {
                                                     os,
                                                     printHeader,
                                                     tokens,
-                                                    firstTokenTime);
+                                                    firstTokenTime,
+                                                    config.getJsonExpression());
                                     code = resp.getStatusLine().getStatusCode();
                                     if (code >= 300) {
                                         break;
@@ -212,7 +218,7 @@ public final class AwsCurl {
                 try {
                     future.get();
                 } catch (ExecutionException e) {
-                    e.getCause().printStackTrace(); // NOPMD
+                    logger.error("", e.getCause());
                     errors.getAndIncrement();
                 }
             }
@@ -350,6 +356,7 @@ public final class AwsCurl {
         private int clients;
         private boolean countTokens;
         private List<byte[]> dataset;
+        private String jq;
         private AtomicInteger index;
 
         public Config(CommandLine cmd) throws IOException {
@@ -409,6 +416,7 @@ public final class AwsCurl {
                 clients = 1;
             }
             countTokens = cmd.hasOption("tokens");
+            jq = cmd.getOptionValue("jq");
         }
 
         private void loadDataset(String dir) throws IOException {
@@ -598,16 +606,23 @@ public final class AwsCurl {
                     Option.builder("N")
                             .longOpt("repeat")
                             .hasArg()
-                            .desc(" Number of requests to perform")
+                            .desc("Number of requests to perform")
                             .build());
             options.addOption(
                     Option.builder("c")
                             .longOpt("clients")
                             .hasArg()
-                            .desc(" Concurrent clients")
+                            .desc("Concurrent clients")
                             .build());
             options.addOption(
                     Option.builder("t").longOpt("tokens").desc("Output token per seconds").build());
+            options.addOption(
+                    Option.builder("j")
+                            .longOpt("jq")
+                            .hasArg()
+                            .argName("EXPRESSION")
+                            .desc("Json query expression for token output")
+                            .build());
             return options;
         }
 
@@ -723,7 +738,7 @@ public final class AwsCurl {
                 addUrlEncodedData(bos, dataRaw, 2);
                 addUrlEncodedData(bos, dataUrlencode, 3);
                 bos.close();
-                String queryString = bos.toString(StandardCharsets.UTF_8.name());
+                String queryString = bos.toString(StandardCharsets.UTF_8);
                 int pos = url.indexOf('?');
                 if (pos >= 0) {
                     if (pos == url.length() - 1) {
@@ -804,6 +819,10 @@ public final class AwsCurl {
             return null;
         }
 
+        public String getJsonExpression() {
+            return jq;
+        }
+
         private byte[] readFile(String fileName) throws IOException {
             Path path = Paths.get(fileName);
             if (!Files.isRegularFile(path)) {
@@ -871,10 +890,10 @@ public final class AwsCurl {
             if (content.startsWith("@")) {
                 File file = new File(content.substring(1));
                 String value = IOUtils.toString(file.toURI(), StandardCharsets.UTF_8);
-                return URLEncoder.encode(value, StandardCharsets.UTF_8.name())
+                return URLEncoder.encode(value, StandardCharsets.UTF_8)
                         .getBytes(StandardCharsets.UTF_8);
             }
-            return URLEncoder.encode(content, StandardCharsets.UTF_8.name())
+            return URLEncoder.encode(content, StandardCharsets.UTF_8)
                     .getBytes(StandardCharsets.UTF_8);
         }
 
