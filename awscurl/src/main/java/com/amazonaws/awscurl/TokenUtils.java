@@ -16,7 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class TokenUtils {
 
@@ -24,20 +23,18 @@ public class TokenUtils {
 
     private static final HuggingFaceTokenizer tokenizer = getTokenizer();
 
-    static void countTokens(
-            List<? extends CharSequence> list, AtomicInteger tokens, SignableRequest request) {
+    static int countTokens(List<? extends CharSequence> list) {
+        int count = 0;
         for (CharSequence item : list) {
             if (tokenizer != null) {
                 Encoding encoding = tokenizer.encode(item.toString());
-                tokens.addAndGet(encoding.getIds().length);
+                count += encoding.getIds().length;
             } else {
                 String[] token = item.toString().split("\\s");
-                tokens.addAndGet(token.length);
+                count += token.length;
             }
         }
-        if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
-            tokens.addAndGet(-request.getInputTokens());
-        }
+        return count;
     }
 
     private static HuggingFaceTokenizer getTokenizer() {

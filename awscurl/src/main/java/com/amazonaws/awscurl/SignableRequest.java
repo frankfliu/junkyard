@@ -1,5 +1,8 @@
 package com.amazonaws.awscurl;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
+
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -192,17 +195,39 @@ public class SignableRequest {
             if (isJson) {
                 String text = new String(content, StandardCharsets.UTF_8);
                 Input input = JsonUtils.GSON.fromJson(text, Input.class);
-                if (input.inputs != null) {
-                    for (String item : input.inputs) {
-                        String[] token = item.split("\\s");
-                        inputTokens += token.length;
+                JsonElement inputs = input.inputs;
+                List<String> list = new ArrayList<>();
+                if (inputs != null) {
+                    if (inputs.isJsonArray()) {
+                        for (JsonElement element : inputs.getAsJsonArray()) {
+                            String str = extractJsonString(element);
+                            if (str != null) {
+                                list.add(str);
+                            }
+                        }
+                    } else {
+                        String str = extractJsonString(inputs);
+                        if (str != null) {
+                            list.add(str);
+                        }
                     }
+                    inputTokens = TokenUtils.countTokens(list);
                 }
             } else {
                 inputTokens = 0;
             }
         }
         return inputTokens;
+    }
+
+    private String extractJsonString(JsonElement element) {
+        if (element.isJsonPrimitive()) {
+            JsonPrimitive primitive = element.getAsJsonPrimitive();
+            if (primitive.isString()) {
+                return primitive.getAsString();
+            }
+        }
+        return null;
     }
 
     public void setContent(byte[] content) {
@@ -235,6 +260,6 @@ public class SignableRequest {
 
     private static final class Input {
 
-        List<String> inputs;
+        JsonElement inputs;
     }
 }
