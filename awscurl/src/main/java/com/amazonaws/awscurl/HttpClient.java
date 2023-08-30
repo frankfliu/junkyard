@@ -108,7 +108,7 @@ public final class HttpClient {
                 if (contentType == null || "text/plain".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
-                    TokenUtils.countTokens(Collections.singletonList(body), tokens, request);
+                    updateTokenCount(Collections.singletonList(body), tokens, request);
                     return resp;
                 } else if ("application/json".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
@@ -117,7 +117,7 @@ public final class HttpClient {
                     JsonElement element = JsonUtils.GSON.fromJson(body, JsonElement.class);
                     List<String> lines = new ArrayList<>();
                     JsonUtils.getJsonList(element, lines, jsonExpression);
-                    TokenUtils.countTokens(lines, tokens, request);
+                    updateTokenCount(lines, tokens, request);
                     return resp;
                 } else if ("application/jsonlines".equals(contentType)) {
                     InputStream is = resp.getEntity().getContent();
@@ -132,7 +132,7 @@ public final class HttpClient {
                                                     list, firstToken, ps, line, jsonExpression)
                                             || hasError;
                         }
-                        TokenUtils.countTokens(list, tokens, request);
+                        updateTokenCount(list, tokens, request);
                     }
                     if (hasError) {
                         StatusLine status = new BasicStatusLine(HttpVersion.HTTP_1_1, 500, "error");
@@ -143,7 +143,7 @@ public final class HttpClient {
                     List<StringBuilder> list = new ArrayList<>();
                     InputStream is = resp.getEntity().getContent();
                     handleEventStream(is, list, firstToken, jsonExpression, ps);
-                    TokenUtils.countTokens(list, tokens, request);
+                    updateTokenCount(list, tokens, request);
                     return resp;
                 }
             }
@@ -277,5 +277,13 @@ public final class HttpClient {
         }
 
         return request;
+    }
+
+    static void updateTokenCount(
+            List<? extends CharSequence> list, AtomicInteger tokens, SignableRequest request) {
+        tokens.addAndGet(TokenUtils.countTokens(list));
+        if (System.getenv("EXCLUDE_INPUT_TOKEN") != null) {
+            tokens.addAndGet(-request.getInputTokens());
+        }
     }
 }
