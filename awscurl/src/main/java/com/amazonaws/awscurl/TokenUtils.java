@@ -7,9 +7,6 @@ import ai.djl.training.util.DownloadUtils;
 import ai.djl.util.Platform;
 import ai.djl.util.Utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
@@ -18,8 +15,6 @@ import java.nio.file.Paths;
 import java.util.List;
 
 public class TokenUtils {
-
-    private static final Logger logger = LoggerFactory.getLogger(TokenUtils.class);
 
     private static final HuggingFaceTokenizer tokenizer = getTokenizer();
 
@@ -76,7 +71,7 @@ public class TokenUtils {
             try {
                 return builder.build();
             } catch (Exception e) {
-                logger.warn("", e);
+                AwsCurl.logger.warn("", e);
                 System.out.println(
                         "Invalid tokenizer: "
                                 + name

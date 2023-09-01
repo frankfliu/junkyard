@@ -7,9 +7,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Type;
@@ -19,7 +16,6 @@ import java.util.Map;
 
 public class JsonUtils {
 
-    private static final Logger logger = LoggerFactory.getLogger(JsonUtils.class);
     private static final Type MAP_TYPE = new TypeToken<Map<String, List<String>>>() {}.getType();
 
     static final Gson GSON = new Gson();
@@ -46,16 +42,16 @@ public class JsonUtils {
                         if (text.isJsonPrimitive()) {
                             list.add(text.getAsString());
                         } else {
-                            logger.debug("Ignore element: {}", text);
+                            AwsCurl.logger.debug("Ignore element: {}", text);
                         }
                     }
                 } else {
-                    logger.debug("Ignore element: {}", e);
+                    AwsCurl.logger.debug("Ignore element: {}", e);
                 }
             }
 
         } else {
-            logger.debug("Ignore element: {}", element);
+            AwsCurl.logger.debug("Ignore element: {}", element);
         }
     }
 
