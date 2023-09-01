@@ -195,6 +195,9 @@ public class SignableRequest {
             if (isJson) {
                 String text = new String(content, StandardCharsets.UTF_8);
                 Input input = JsonUtils.GSON.fromJson(text, Input.class);
+                if (input == null) {
+                    return 0;
+                }
                 JsonElement inputs = input.inputs;
                 List<String> list = new ArrayList<>();
                 if (inputs != null) {

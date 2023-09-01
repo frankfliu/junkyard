@@ -429,8 +429,12 @@ public final class AwsCurl {
                     stream.forEach(
                             p -> {
                                 try {
-                                    if (Files.isRegularFile(path) && !Files.isHidden(path)) {
-                                        dataset.add(Files.readAllBytes(p));
+                                    if (Files.isRegularFile(p) && !Files.isHidden(p)) {
+                                        byte[] buf = Files.readAllBytes(p);
+                                        if (buf.length == 0) {
+                                            System.out.println("empty dataset file: " + p);
+                                        }
+                                        dataset.add(buf);
                                     }
                                 } catch (IOException e) {
                                     throw new IllegalStateException(e);
