@@ -14,6 +14,7 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.slf4j.ILoggerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,6 +25,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -51,19 +54,21 @@ import java.util.stream.Stream;
 @SuppressWarnings("PMD.SystemPrintln")
 public final class AwsCurl {
 
-    private static final Logger logger = LoggerFactory.getLogger(AwsCurl.class);
+    static {
+        String logLevel = System.getProperty("org.slf4j.simpleLogger.defaultLogLevel");
+        if (logLevel == null) {
+            System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "warning");
+        }
+    }
+
+    static Logger logger = LoggerFactory.getLogger(AwsCurl.class);
 
     private static final String SM_CUSTOM_HEADER = "X-Amzn-SageMaker-Custom-Attributes";
 
     private AwsCurl() {}
 
     public static void main(String[] args) {
-        String logLevel = System.getProperty("org.slf4j.simpleLogger.defaultLogLevel");
-        if (logLevel == null) {
-            System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "off");
-        }
         String jarName = getJarName();
-
         Options options = Config.getOptions();
         DefaultParser parser = new DefaultParser();
         try {
@@ -82,7 +87,22 @@ public final class AwsCurl {
             }
             Config config = new Config(cmd);
             if (config.isVerbose()) {
-                System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "debug");
+                System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "info");
+                try {
+                    ILoggerFactory factory = LoggerFactory.getILoggerFactory();
+                    Method method = factory.getClass().getDeclaredMethod("reset");
+                    method.setAccessible(true);
+                    method.invoke(factory);
+                    Field field = logger.getClass().getDeclaredField("CONFIG_PARAMS");
+                    field.setAccessible(true);
+                    Object params = field.get(logger);
+                    Method m = params.getClass().getDeclaredMethod("init");
+                    m.setAccessible(true);
+                    m.invoke(params);
+                    logger = LoggerFactory.getLogger(AwsCurl.class);
+                } catch (ReflectiveOperationException e) {
+                    logger.debug(null, e);
+                }
             }
 
             String url = config.getUrl(cmdArgs.get(0));

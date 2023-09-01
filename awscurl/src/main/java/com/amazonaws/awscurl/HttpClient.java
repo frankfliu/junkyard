@@ -69,7 +69,7 @@ public final class HttpClient {
                             request.getHttpMethod(), request.getUri(), request.getContent());
             if (dumpHeader) {
                 String path = request.getUri().getPath();
-                if (!path.startsWith("/")) {
+                if (!path.startsWith("/") && !path.isEmpty()) {
                     path = path.substring(1);
                 }
                 System.out.println("> " + request.getHttpMethod() + " /" + path + " HTTP/1.1");
