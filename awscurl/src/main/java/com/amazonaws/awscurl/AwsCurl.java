@@ -124,7 +124,6 @@ public final class AwsCurl {
             }
 
             boolean insecure = config.isInsecure();
-            OutputStream os = config.getOutput();
             boolean printHeader = config.isInclude() || config.isVerbose();
 
             int clients = config.getClients();
@@ -137,8 +136,10 @@ public final class AwsCurl {
             ExecutorService executor = Executors.newFixedThreadPool(clients);
             ArrayList<Callable<Void>> tasks = new ArrayList<>(clients);
             for (int i = 0; i < clients; ++i) {
+                final int clientId = i;
                 tasks.add(
                         () -> {
+                            OutputStream os = config.getOutput(clientId);
                             long[] firstTokenTime = {0L};
                             for (int j = 0; j < nRequests; ++j) {
                                 SignableRequest request = new SignableRequest(serviceName, uri);
@@ -204,6 +205,7 @@ public final class AwsCurl {
                                     errors.getAndIncrement();
                                 }
                             }
+                            os.close();
                             return null;
                         });
             }
@@ -650,9 +652,9 @@ public final class AwsCurl {
             return insecure;
         }
 
-        public OutputStream getOutput() throws IOException {
+        public OutputStream getOutput(int clientId) throws IOException {
             if (output != null) {
-                return Files.newOutputStream(Paths.get(output));
+                return Files.newOutputStream(Paths.get(output + '.' + clientId));
             }
             if (nRequests > 1) {
                 return NullOutputStream.NULL_OUTPUT_STREAM;
