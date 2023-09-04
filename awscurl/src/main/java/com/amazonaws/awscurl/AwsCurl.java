@@ -119,8 +119,7 @@ public final class AwsCurl {
             if (serviceName != null) {
                 AWSCredentials credentials = AWSCredentials.getCredentials(config.getProfile());
                 if (credentials == null) {
-                    System.err.println(
-                            "The config profile (" + config.getProfile() + ") could not be found.");
+                    System.err.println("Could not load AWSCredentials.");
                     return;
                 }
                 if (StringUtils.isEmpty(credentials.getAWSAccessKeyId())) {
