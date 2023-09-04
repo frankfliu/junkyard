@@ -1,5 +1,7 @@
 package com.amazonaws.awscurl;
 
+import ai.djl.util.RandomUtils;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -158,6 +160,10 @@ public final class AwsCurl {
                 final int clientId = i;
                 tasks.add(
                         () -> {
+                            int delay = config.getDelay();
+                            if (delay > 0) {
+                                Thread.sleep(delay);
+                            }
                             OutputStream os = config.getOutput(clientId);
                             long[] firstTokenTime = {0L};
                             for (int j = 0; j < nRequests; ++j) {
@@ -378,6 +384,8 @@ public final class AwsCurl {
         private boolean countTokens;
         private List<byte[]> dataset;
         private String jq;
+        private int delay;
+        private boolean random;
         private AtomicInteger index;
 
         public Config(CommandLine cmd) throws IOException {
@@ -438,6 +446,29 @@ public final class AwsCurl {
             }
             countTokens = cmd.hasOption("tokens");
             jq = cmd.getOptionValue("jq");
+            String delayExpression = cmd.getOptionValue("delay");
+            if (delayExpression != null) {
+                Pattern pattern = Pattern.compile("rand\\((\\d+)( *, *(\\d+))?\\)|(\\d+)");
+                Matcher m = pattern.matcher(delayExpression);
+                if (m.matches()) {
+                    String min = m.group(1);
+                    String max = m.group(3);
+                    String d = m.group(4);
+                    if (d != null) {
+                        delay = Integer.parseInt(d);
+                    } else {
+                        random = true;
+                        if (max != null) {
+                            delay = Integer.parseInt(max) - Integer.parseInt(min);
+                        } else {
+                            delay = Integer.parseInt(min);
+                        }
+                    }
+                    if (delay < 0) {
+                        delay = 0;
+                    }
+                }
+            }
         }
 
         private void loadDataset(String dir) throws IOException {
@@ -648,6 +679,15 @@ public final class AwsCurl {
                             .argName("EXPRESSION")
                             .desc("Json query expression for token output")
                             .build());
+            options.addOption(
+                    Option.builder()
+                            .longOpt("delay")
+                            .hasArg()
+                            .argName("DELAY")
+                            .desc(
+                                    "Delay in millis between each request (e.g. 10 or rand(100,"
+                                            + " 200))")
+                            .build());
             return options;
         }
 
@@ -846,6 +886,13 @@ public final class AwsCurl {
 
         public String getJsonExpression() {
             return jq;
+        }
+
+        public int getDelay() {
+            if (random) {
+                RandomUtils.nextInt(delay);
+            }
+            return delay;
         }
 
         private byte[] readFile(String fileName) throws IOException {
