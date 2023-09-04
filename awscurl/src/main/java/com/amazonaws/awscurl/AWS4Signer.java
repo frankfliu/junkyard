@@ -2,7 +2,6 @@ package com.amazonaws.awscurl;
 
 import org.apache.commons.codec.binary.Hex;
 
-import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -275,21 +274,17 @@ public class AWS4Signer {
 
     private String getCanonicalizedQueryString(Map<String, List<String>> parameters) {
         SortedMap<String, List<String>> sorted = new TreeMap<>();
-        try {
-            for (Map.Entry<String, List<String>> entry : parameters.entrySet()) {
-                String key = entry.getKey();
-                String encodedParamName = URLEncoder.encode(key, StandardCharsets.UTF_8.name());
-                List<String> paramValues = entry.getValue();
-                List<String> encodedValues = new ArrayList<>(paramValues.size());
-                for (String value : paramValues) {
-                    encodedValues.add(URLEncoder.encode(value, StandardCharsets.UTF_8.name()));
-                }
-
-                Collections.sort(encodedValues);
-                sorted.put(encodedParamName, encodedValues);
+        for (Map.Entry<String, List<String>> entry : parameters.entrySet()) {
+            String key = entry.getKey();
+            String encodedParamName = URLEncoder.encode(key, StandardCharsets.UTF_8);
+            List<String> paramValues = entry.getValue();
+            List<String> encodedValues = new ArrayList<>(paramValues.size());
+            for (String value : paramValues) {
+                encodedValues.add(URLEncoder.encode(value, StandardCharsets.UTF_8));
             }
-        } catch (UnsupportedEncodingException e) {
-            throw new AssertionError(e);
+
+            Collections.sort(encodedValues);
+            sorted.put(encodedParamName, encodedValues);
         }
 
         StringBuilder result = new StringBuilder();
@@ -347,27 +342,22 @@ public class AWS4Signer {
             return null;
         }
 
-        try {
-            StringBuilder sb = new StringBuilder();
-            for (Map.Entry<String, List<String>> entry : requestParams.entrySet()) {
-                String parameterName = entry.getKey();
-                String encodedName =
-                        URLEncoder.encode(parameterName, StandardCharsets.UTF_8.name());
-                for (String value : entry.getValue()) {
-                    if (sb.length() > 0) {
-                        sb.append('&');
-                    }
-                    sb.append(encodedName);
-                    if (!StringUtils.isEmpty(value)) {
-                        sb.append('=');
-                        sb.append(URLEncoder.encode(value, StandardCharsets.UTF_8.name()));
-                    }
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, List<String>> entry : requestParams.entrySet()) {
+            String parameterName = entry.getKey();
+            String encodedName = URLEncoder.encode(parameterName, StandardCharsets.UTF_8);
+            for (String value : entry.getValue()) {
+                if (sb.length() > 0) {
+                    sb.append('&');
+                }
+                sb.append(encodedName);
+                if (!StringUtils.isEmpty(value)) {
+                    sb.append('=');
+                    sb.append(URLEncoder.encode(value, StandardCharsets.UTF_8));
                 }
             }
-            return sb.toString();
-        } catch (UnsupportedEncodingException e) {
-            throw new AssertionError(e);
         }
+        return sb.toString();
     }
 
     private static boolean usePayloadForQueryParameters(SignableRequest request) {

@@ -1,5 +1,9 @@
 package com.amazonaws.awscurl;
 
+import ai.djl.util.Ec2Utils;
+
+import com.google.gson.annotations.SerializedName;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -23,9 +27,15 @@ public class AWSCredentials {
     public static final String AWS_PROFILE_ENVIRONMENT_VARIABLE = "AWS_PROFILE";
     public static final String AWS_PROFILE_SYSTEM_PROPERTY = "aws.profile";
 
+    @SerializedName("AccessKeyId")
     private String awsAccessKey;
+
+    @SerializedName("SecretAccessKey")
     private String awsSecretKey;
+
+    @SerializedName("Token")
     private String sessionToken;
+
     private String region;
 
     public AWSCredentials(String awsAccessKey, String awsSecretKey, String sessionToken) {
@@ -86,6 +96,12 @@ public class AWSCredentials {
             return new AWSCredentials(accessKey, secretKey, sessionToken);
         }
 
+        String cred =
+                Ec2Utils.readMetadata("identity-credentials/ec2/security-credentials/ec2-instance");
+        if (cred != null && !cred.isEmpty()) {
+            return JsonUtils.GSON.fromJson(cred, AWSCredentials.class);
+        }
+
         return loadFromProfile(getDefaultProfileName());
     }
 
@@ -103,7 +119,6 @@ public class AWSCredentials {
         if (profileFile.exists() && profileFile.isFile()) {
             return loadProfileCredentials(profileFile, profile);
         }
-
         return null;
     }
 
@@ -135,7 +150,7 @@ public class AWSCredentials {
 
     private static Map<String, String> loadProfile(File file, String profile) {
         Map<String, String> map = new ConcurrentHashMap<>();
-        try (Scanner scanner = new Scanner(file, StandardCharsets.UTF_8.name())) {
+        try (Scanner scanner = new Scanner(file, StandardCharsets.UTF_8)) {
             boolean profileFound = false;
             while (scanner.hasNextLine()) {
                 String line = scanner.nextLine().trim();
