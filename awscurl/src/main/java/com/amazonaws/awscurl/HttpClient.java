@@ -63,6 +63,7 @@ public final class HttpClient {
             long[] firstToken,
             String jsonExpression)
             throws IOException {
+        ps.write(("\n" + System.currentTimeMillis() + ": ").getBytes(StandardCharsets.UTF_8));
         try (CloseableHttpClient client = getHttpClient(insecure, timeout)) {
             HttpUriRequest req =
                     createHttpRequest(
