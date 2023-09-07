@@ -14,11 +14,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-public class JsonUtils {
+public final class JsonUtils {
 
     private static final Type MAP_TYPE = new TypeToken<Map<String, List<String>>>() {}.getType();
 
     static final Gson GSON = new Gson();
+
+    private JsonUtils() {}
 
     static void getJsonList(JsonElement element, List<String> list, String name) {
         if (name == null) {
@@ -55,6 +57,7 @@ public class JsonUtils {
         }
     }
 
+    @SuppressWarnings("PMD.SystemPrintln")
     static boolean processJsonLine(
             List<StringBuilder> list, long[] firstToken, OutputStream ps, String line, String name)
             throws IOException {
