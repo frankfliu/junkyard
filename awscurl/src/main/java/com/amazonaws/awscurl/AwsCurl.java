@@ -63,12 +63,13 @@ public final class AwsCurl {
         }
     }
 
-    static Logger logger = LoggerFactory.getLogger(AwsCurl.class);
+    static Logger logger = LoggerFactory.getLogger(AwsCurl.class); // NOPMD
 
     private static final String SM_CUSTOM_HEADER = "X-Amzn-SageMaker-Custom-Attributes";
 
     private AwsCurl() {}
 
+    @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
     public static void main(String[] args) {
         String jarName = getJarName();
         Options options = Config.getOptions();

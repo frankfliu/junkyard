@@ -1,5 +1,5 @@
 plugins {
-    id "com.github.spotbugs" version "4.7.1" apply false
+    id "com.github.spotbugs" version "6.0.0-beta.3" apply false
 }
 
 defaultTasks 'build'
@@ -32,11 +32,19 @@ def javaProjects() {
 
 configure(javaProjects()) {
     apply plugin: 'java-library'
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-    compileJava.options.encoding = "UTF-8"
-    compileTestJava.options.encoding = "UTF-8"
-    compileJava.options.compilerArgs.addAll(["--release", "11"])
+    java {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+        compileJava {
+            options.encoding = "UTF-8"
+            options.compilerArgs << "--release" << "11" << "-proc:none" << "-Xlint:all,-options,-static" << "-Werror"
+        }
+
+        compileTestJava {
+            options.encoding = "UTF-8"
+            options.compilerArgs << "-proc:none" << "-Xlint:all,-options,-static" << "-Werror"
+        }
+    }
 
     apply plugin: 'eclipse'
 
@@ -72,13 +80,5 @@ configure(javaProjects()) {
             showStandardStreams = true
             events "passed", "skipped", "failed", "standardOut", "standardError"
         }
-    }
-
-    compileJava {
-        options.compilerArgs << "-proc:none" << "-Xlint:all,-options,-static" << "-Werror"
-    }
-
-    compileTestJava {
-        options.compilerArgs << "-proc:none" << "-Xlint:all,-options,-static" << "-Werror"
     }
 }

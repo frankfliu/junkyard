@@ -14,15 +14,17 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
-public class TokenUtils {
+public final class TokenUtils {
 
-    private static final HuggingFaceTokenizer tokenizer = getTokenizer();
+    private static final HuggingFaceTokenizer TOKENIZER = getTokenizer();
+
+    private TokenUtils() {}
 
     static int countTokens(List<? extends CharSequence> list) {
         int count = 0;
         for (CharSequence item : list) {
-            if (tokenizer != null) {
-                Encoding encoding = tokenizer.encode(item.toString());
+            if (TOKENIZER != null) {
+                Encoding encoding = TOKENIZER.encode(item.toString());
                 count += encoding.getIds().length;
             } else {
                 String[] token = item.toString().split("\\s");
@@ -32,6 +34,7 @@ public class TokenUtils {
         return count;
     }
 
+    @SuppressWarnings("PMD.SystemPrintln")
     private static HuggingFaceTokenizer getTokenizer() {
         try {
             Path cacheDir = Utils.getEngineCacheDir("tokenizers");
