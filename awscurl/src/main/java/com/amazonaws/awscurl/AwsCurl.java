@@ -150,6 +150,7 @@ public final class AwsCurl {
 
             int clients = config.getClients();
             int nRequests = config.getNumberOfRequests();
+            AtomicInteger totalReq = new AtomicInteger(clients * nRequests);
             final List<Long> success = Collections.synchronizedList(new ArrayList<>());
             final List<Long> firstTokens = Collections.synchronizedList(new ArrayList<>());
             final AtomicInteger errors = new AtomicInteger();
@@ -167,7 +168,7 @@ public final class AwsCurl {
                             }
                             OutputStream os = config.getOutput(clientId);
                             long[] firstTokenTime = {0L};
-                            for (int j = 0; j < nRequests; ++j) {
+                            while (totalReq.getAndDecrement() > 0) {
                                 SignableRequest request = new SignableRequest(serviceName, uri);
                                 request.setContent(config.getRequestBody());
                                 request.setHeaders(config.getRequestHeaders());
