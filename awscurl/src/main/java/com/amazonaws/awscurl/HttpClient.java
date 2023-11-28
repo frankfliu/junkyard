@@ -1,6 +1,7 @@
 package com.amazonaws.awscurl;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.NullOutputStream;
@@ -103,8 +104,18 @@ public final class HttpClient {
                 return resp;
             }
 
-            Header header = resp.getFirstHeader("Content-Type");
-            String contentType = header == null ? null : header.getValue();
+            Header[] headers = resp.getHeaders("Content-Type");
+            String contentType = null;
+            if (headers != null) {
+                for (Header header : headers) {
+                    String[] parts = header.getValue().split(";");
+                    contentType = parts[0];
+                    if ("text/event-stream".equals(contentType)) {
+                        break;
+                    }
+                }
+            }
+
             if (tokens != null) {
                 if (contentType == null || "text/plain".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
@@ -114,11 +125,16 @@ public final class HttpClient {
                 } else if ("application/json".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
+                    try {
+                        JsonElement element = JsonUtils.GSON.fromJson(body, JsonElement.class);
+                        List<String> lines = new ArrayList<>();
+                        JsonUtils.getJsonList(element, lines, jsonExpression);
+                        updateTokenCount(lines, tokens, request);
+                    } catch (JsonParseException e) {
+                        AwsCurl.logger.warn("Invalid json response: {}", body);
+                        throw e;
+                    }
 
-                    JsonElement element = JsonUtils.GSON.fromJson(body, JsonElement.class);
-                    List<String> lines = new ArrayList<>();
-                    JsonUtils.getJsonList(element, lines, jsonExpression);
-                    updateTokenCount(lines, tokens, request);
                     return resp;
                 } else if ("application/jsonlines".equals(contentType)) {
                     InputStream is = resp.getEntity().getContent();
@@ -138,6 +154,24 @@ public final class HttpClient {
                     if (hasError) {
                         StatusLine status = new BasicStatusLine(HttpVersion.HTTP_1_1, 500, "error");
                         return new BasicHttpResponse(status);
+                    }
+                    return resp;
+                } else if ("text/event-stream".equals(contentType)) {
+                    InputStream is = resp.getEntity().getContent();
+                    List<String> list = new ArrayList<>();
+                    try (BufferedReader reader =
+                            new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            line = line.trim();
+                            if (!line.startsWith("data:")) {
+                                continue;
+                            }
+                            line = line.substring(5);
+                            JsonElement element = JsonUtils.GSON.fromJson(line, JsonElement.class);
+                            JsonUtils.getJsonList(element, list, jsonExpression);
+                        }
+                        updateTokenCount(list, tokens, request);
                     }
                     return resp;
                 } else if ("application/vnd.amazon.eventstream".equals(contentType)) {

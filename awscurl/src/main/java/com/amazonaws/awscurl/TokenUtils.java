@@ -24,7 +24,7 @@ public final class TokenUtils {
         int count = 0;
         for (CharSequence item : list) {
             if (TOKENIZER != null) {
-                Encoding encoding = TOKENIZER.encode(item.toString());
+                Encoding encoding = TOKENIZER.encode(item.toString(), false);
                 count += encoding.getIds().length;
             } else {
                 String[] token = item.toString().split("\\s");

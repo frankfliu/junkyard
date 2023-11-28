@@ -51,7 +51,6 @@ public final class JsonUtils {
                     AwsCurl.logger.debug("Ignore element: {}", e);
                 }
             }
-
         } else {
             AwsCurl.logger.debug("Ignore element: {}", element);
         }
