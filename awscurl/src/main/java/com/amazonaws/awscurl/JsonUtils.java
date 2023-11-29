@@ -58,15 +58,15 @@ public final class JsonUtils {
 
     @SuppressWarnings("PMD.SystemPrintln")
     static boolean processJsonLine(
-            List<StringBuilder> list, long[] firstToken, OutputStream ps, String line, String name)
+            List<StringBuilder> list, long[] requestTime, OutputStream ps, String line, String name)
             throws IOException {
         if (name == null) {
             name = "outputs";
         }
         boolean hasError = false;
-        boolean first = firstToken[0] == 0L;
+        boolean first = requestTime[1] == 0L;
         if (first) {
-            firstToken[0] = System.nanoTime();
+            requestTime[1] = System.nanoTime();
         }
         try {
             Map<String, List<String>> map = GSON.fromJson(line, MAP_TYPE);

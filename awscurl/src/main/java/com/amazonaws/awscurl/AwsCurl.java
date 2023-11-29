@@ -167,7 +167,7 @@ public final class AwsCurl {
                                 Thread.sleep(delay);
                             }
                             OutputStream os = config.getOutput(clientId);
-                            long[] firstTokenTime = {0L};
+                            long[] requestTime = {0L, 0L};
                             while (totalReq.getAndDecrement() > 0) {
                                 SignableRequest request = new SignableRequest(serviceName, uri);
                                 request.setContent(config.getRequestBody());
@@ -175,8 +175,8 @@ public final class AwsCurl {
                                 request.setHttpMethod(config.getRequestMethod());
                                 request.setSigner(signer);
                                 request.sign();
-                                long begin = System.nanoTime();
-                                firstTokenTime[0] = 0L;
+                                requestTime[0] = 0L;
+                                requestTime[1] = 0L;
                                 HttpResponse resp =
                                         HttpClient.sendRequest(
                                                 request,
@@ -185,15 +185,15 @@ public final class AwsCurl {
                                                 os,
                                                 printHeader,
                                                 tokens,
-                                                firstTokenTime,
+                                                requestTime,
                                                 config.getJsonExpression());
                                 int code = resp.getStatusLine().getStatusCode();
                                 if (code >= 300) {
                                     errors.getAndIncrement();
                                     continue;
                                 }
-                                if (firstTokenTime[0] > 0) {
-                                    firstTokens.add(firstTokenTime[0] - begin);
+                                if (requestTime[1] > 0) {
+                                    firstTokens.add(requestTime[1]);
                                 }
 
                                 String token = getNextToken(resp.getFirstHeader(SM_CUSTOM_HEADER));
@@ -211,7 +211,7 @@ public final class AwsCurl {
                                                     os,
                                                     printHeader,
                                                     tokens,
-                                                    firstTokenTime,
+                                                    requestTime,
                                                     config.getJsonExpression());
                                     code = resp.getStatusLine().getStatusCode();
                                     if (code >= 300) {
@@ -227,7 +227,7 @@ public final class AwsCurl {
                                 }
 
                                 if (code < 300) {
-                                    success.add(System.nanoTime() - begin);
+                                    success.add(requestTime[0]);
                                 } else {
                                     errors.getAndIncrement();
                                 }
