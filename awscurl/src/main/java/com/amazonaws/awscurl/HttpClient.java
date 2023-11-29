@@ -61,10 +61,11 @@ public final class HttpClient {
             OutputStream ps,
             boolean dumpHeader,
             AtomicInteger tokens,
-            long[] firstToken,
+            long[] requestTime,
             String jsonExpression)
             throws IOException {
         ps.write(("\n" + System.currentTimeMillis() + ": ").getBytes(StandardCharsets.UTF_8));
+        long begin = System.nanoTime();
         try (CloseableHttpClient client = getHttpClient(insecure, timeout)) {
             HttpUriRequest req =
                     createHttpRequest(
@@ -103,6 +104,7 @@ public final class HttpClient {
                                         resp.getEntity().getContent(), StandardCharsets.UTF_8));
                 return resp;
             }
+            requestTime[0] += System.nanoTime() - begin;
 
             Header[] headers = resp.getHeaders("Content-Type");
             String contentType = null;
@@ -146,9 +148,11 @@ public final class HttpClient {
                         while ((line = reader.readLine()) != null) {
                             hasError =
                                     JsonUtils.processJsonLine(
-                                                    list, firstToken, ps, line, jsonExpression)
+                                                    list, requestTime, ps, line, jsonExpression)
                                             || hasError;
                         }
+                        requestTime[0] = System.nanoTime() - begin;
+                        requestTime[1] -= begin;
                         updateTokenCount(list, tokens, request);
                     }
                     if (hasError) {
@@ -167,17 +171,23 @@ public final class HttpClient {
                             if (!line.startsWith("data:")) {
                                 continue;
                             }
+                            if (requestTime[1] == 0) {
+                                requestTime[1] = System.nanoTime() - begin;
+                            }
                             line = line.substring(5);
                             JsonElement element = JsonUtils.GSON.fromJson(line, JsonElement.class);
                             JsonUtils.getJsonList(element, list, jsonExpression);
                         }
+                        requestTime[0] = System.nanoTime() - begin;
                         updateTokenCount(list, tokens, request);
                     }
                     return resp;
                 } else if ("application/vnd.amazon.eventstream".equals(contentType)) {
                     List<StringBuilder> list = new ArrayList<>();
                     InputStream is = resp.getEntity().getContent();
-                    handleEventStream(is, list, firstToken, jsonExpression, ps);
+                    handleEventStream(is, list, requestTime, jsonExpression, ps);
+                    requestTime[0] = System.nanoTime() - begin;
+                    requestTime[1] -= begin;
                     updateTokenCount(list, tokens, request);
                     return resp;
                 }
@@ -186,7 +196,7 @@ public final class HttpClient {
             try (InputStream is = resp.getEntity().getContent()) {
                 if ("application/vnd.amazon.eventstream".equals(contentType)) {
                     List<StringBuilder> list = new ArrayList<>();
-                    handleEventStream(is, list, firstToken, jsonExpression, ps);
+                    handleEventStream(is, list, requestTime, jsonExpression, ps);
                 } else {
                     IOUtils.copy(is, ps);
                     ps.flush();
@@ -199,7 +209,7 @@ public final class HttpClient {
     private static void handleEventStream(
             InputStream is,
             List<StringBuilder> list,
-            long[] firstToken,
+            long[] requestTime,
             String jsonExpression,
             OutputStream ps)
             throws IOException {
@@ -224,7 +234,7 @@ public final class HttpClient {
                 String line =
                         new String(payload, headerLength, payloadLength, StandardCharsets.UTF_8)
                                 .trim();
-                if (JsonUtils.processJsonLine(list, firstToken, ps, line, jsonExpression)) {
+                if (JsonUtils.processJsonLine(list, requestTime, ps, line, jsonExpression)) {
                     throw new IOException("Response contains error");
                 }
             } catch (EOFException e) {
