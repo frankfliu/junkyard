@@ -59,8 +59,10 @@ public final class AwsCurl {
     static {
         String logLevel = System.getProperty("org.slf4j.simpleLogger.defaultLogLevel");
         if (logLevel == null) {
-            System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "warning");
+            System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "warn");
         }
+        System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
+        System.setProperty("org.slf4j.simpleLogger.showLogName", "false");
     }
 
     static Logger logger = LoggerFactory.getLogger(AwsCurl.class); // NOPMD
@@ -269,14 +271,17 @@ public final class AwsCurl {
                 System.out.println("Concurrent clients: " + clients);
                 System.out.println("Total requests: " + totalRequest);
                 if (successReq > 0) {
-                    System.out.printf("TPS: %.2f/s%n", successReq * 1000000000d / delta);
+                    System.out.printf(
+                            "TPS: %.2f/s%n", successReq * 1000000000d / totalTime / clients);
                     if (tokens != null) {
                         int totalTokens = tokens.get();
                         String tokenizer = System.getenv("TOKENIZER");
                         String n = tokenizer == null ? "word" : "token";
                         System.out.printf("Total %s: %d%n", n, totalTokens);
                         System.out.printf("%s/req: %d%n", n, totalTokens / totalRequest);
-                        System.out.printf("%s/s: %.2f/s%n", n, totalTokens * 1000000000d / delta);
+                        System.out.printf(
+                                "%s/s: %.2f/s%n",
+                                n, totalTokens * 1000000000d / totalTime / clients);
                     }
                     System.out.printf(
                             "Average Latency: %.2f ms.%n", totalTime / 1000000d / successReq);
