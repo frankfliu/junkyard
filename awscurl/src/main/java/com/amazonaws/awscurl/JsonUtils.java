@@ -5,18 +5,13 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import com.google.gson.reflect.TypeToken;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 
 public final class JsonUtils {
-
-    private static final Type MAP_TYPE = new TypeToken<Map<String, List<String>>>() {}.getType();
 
     static final Gson GSON = new Gson();
 
@@ -69,22 +64,33 @@ public final class JsonUtils {
             requestTime[1] = System.nanoTime();
         }
         try {
-            Map<String, List<String>> map = GSON.fromJson(line, MAP_TYPE);
-            List<String> item = map.get(name);
-            if (item != null) {
-                if (list.isEmpty()) {
-                    for (String s : item) {
-                        list.add(new StringBuilder(s));
+            JsonObject map = GSON.fromJson(line, JsonObject.class);
+            JsonElement outputs = map.get(name);
+            if (outputs != null) {
+                if (outputs.isJsonArray()) {
+                    JsonArray arr = outputs.getAsJsonArray();
+                    List<JsonElement> items = arr.asList();
+                    if (list.isEmpty()) {
+                        for (JsonElement s : items) {
+                            list.add(new StringBuilder(s.getAsString()));
+                        }
+                    } else {
+                        for (int i = 0; i < items.size(); ++i) {
+                            list.get(i).append(items.get(i).getAsString());
+                        }
                     }
-                } else {
-                    for (int i = 0; i < item.size(); ++i) {
-                        list.get(i).append(item.get(i));
+                } else if (outputs.isJsonPrimitive()) {
+                    if (list.isEmpty()) {
+                        list.add(new StringBuilder(outputs.getAsString()));
+                    } else {
+                        list.get(0).append(outputs.getAsString());
                     }
                 }
             }
         } catch (JsonParseException e) {
             if (first) {
                 System.out.println("Invalid json line: " + line);
+                AwsCurl.logger.debug("Invalid json line", e);
             }
             hasError = true;
         }
