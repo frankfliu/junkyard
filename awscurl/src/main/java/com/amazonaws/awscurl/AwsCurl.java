@@ -263,6 +263,7 @@ public final class AwsCurl {
                 }
                 Collections.sort(success);
                 long totalTime = success.stream().mapToLong(val -> val).sum();
+                logger.debug("Total request time: {} ms", totalTime / 1000000d);
 
                 System.out.printf("Total time: %.2f ms.%n", delta / 1000000d);
                 System.out.printf(
@@ -272,7 +273,7 @@ public final class AwsCurl {
                 System.out.println("Total requests: " + totalRequest);
                 if (successReq > 0) {
                     System.out.printf(
-                            "TPS: %.2f/s%n", successReq * 1000000000d / totalTime / clients);
+                            "TPS: %.2f/s%n", successReq * 1000000000d / totalTime * clients);
                     if (tokens != null) {
                         int totalTokens = tokens.get();
                         String tokenizer = System.getenv("TOKENIZER");
@@ -281,7 +282,7 @@ public final class AwsCurl {
                         System.out.printf("%s/req: %d%n", n, totalTokens / totalRequest);
                         System.out.printf(
                                 "%s/s: %.2f/s%n",
-                                n, totalTokens * 1000000000d / totalTime / clients);
+                                n, totalTokens * 1000000000d / totalTime * clients);
                     }
                     System.out.printf(
                             "Average Latency: %.2f ms.%n", totalTime / 1000000d / successReq);

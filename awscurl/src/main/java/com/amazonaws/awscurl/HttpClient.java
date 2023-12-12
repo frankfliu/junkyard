@@ -104,7 +104,6 @@ public final class HttpClient {
                                         resp.getEntity().getContent(), StandardCharsets.UTF_8));
                 return resp;
             }
-            requestTime[0] += System.nanoTime() - begin;
 
             Header[] headers = resp.getHeaders("Content-Type");
             String contentType = null;
@@ -121,11 +120,13 @@ public final class HttpClient {
             if (tokens != null) {
                 if (contentType == null || "text/plain".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
+                    requestTime[0] += System.nanoTime() - begin;
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
                     updateTokenCount(Collections.singletonList(body), tokens, request);
                     return resp;
                 } else if ("application/json".equals(contentType)) {
                     String body = EntityUtils.toString(resp.getEntity());
+                    requestTime[0] += System.nanoTime() - begin;
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
                     try {
                         JsonElement element = JsonUtils.GSON.fromJson(body, JsonElement.class);
