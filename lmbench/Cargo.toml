@@ -1,0 +1,10 @@
+[package]
+name = "lmbench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.16", features = ["derive"] }
+reqwest = "0.12.7"
+tokio = { version="1.39.3" , features = ["rt-multi-thread", "macros"]}
