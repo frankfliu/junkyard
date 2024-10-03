@@ -1,6 +1,6 @@
 package com.amazonaws.awscurl;
 
-public final class StringUtils {
+final class StringUtils {
 
     private StringUtils() {}
 
