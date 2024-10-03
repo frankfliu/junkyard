@@ -6,7 +6,8 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
 
-public class AWS4SignerRequestParams {
+/** The AWSv4 signning request parameters. */
+public class AwsV4SignerRequestParams {
 
     private SignableRequest request;
     private long signingDateTimeMilli;
@@ -17,7 +18,16 @@ public class AWS4SignerRequestParams {
     private String formattedSigningDate;
     private String signingAlgorithm;
 
-    public AWS4SignerRequestParams(
+    /**
+     * Constructs a new {@code AWS4SignerRequestParams} instance.
+     *
+     * @param request the request
+     * @param signingDateOverride the override data
+     * @param regionNameOverride the override region
+     * @param serviceName the AWS service name
+     * @param signingAlgorithm the signing algorithm
+     */
+    public AwsV4SignerRequestParams(
             SignableRequest request,
             Date signingDateOverride,
             String regionNameOverride,
@@ -58,34 +68,74 @@ public class AWS4SignerRequestParams {
         return dateStamp + "/" + regionName + "/" + serviceName + "/" + "aws4_request";
     }
 
+    /**
+     * Returns the request.
+     *
+     * @return the request to be signed
+     */
     public SignableRequest getRequest() {
         return request;
     }
 
+    /**
+     * Returns the scope.
+     *
+     * @return the scope
+     */
     public String getScope() {
         return scope;
     }
 
+    /**
+     * Returns the cached datetime string.
+     *
+     * @return the cached datetime string
+     */
     public String getFormattedSigningDateTime() {
         return formattedSigningDateTime;
     }
 
+    /**
+     * Returns the signing datetime in millis.
+     *
+     * @return the signing datetime in millis
+     */
     public long getSigningDateTimeMilli() {
         return signingDateTimeMilli;
     }
 
+    /**
+     * Returns the AWS region.
+     *
+     * @return the AWS region
+     */
     public String getRegionName() {
         return regionName;
     }
 
+    /**
+     * Returns the service name.
+     *
+     * @return the service name
+     */
     public String getServiceName() {
         return serviceName;
     }
 
+    /**
+     * Returns the cached signing date.
+     *
+     * @return the cached signing date
+     */
     public String getFormattedSigningDate() {
         return formattedSigningDate;
     }
 
+    /**
+     * Returns the signing algorithm.
+     *
+     * @return the signing algorithm
+     */
     public String getSigningAlgorithm() {
         return signingAlgorithm;
     }

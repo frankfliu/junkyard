@@ -1,17 +1,22 @@
 package com.amazonaws.awscurl;
 
 import ai.djl.util.Ec2Utils;
+import ai.djl.util.Utils;
 
 import com.google.gson.annotations.SerializedName;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class AWSCredentials {
+/** A class represents AWS credentials. */
+public class AwsCredentials {
 
     public static final String ACCESS_KEY_ENV_VAR = "AWS_ACCESS_KEY_ID";
     public static final String ALTERNATE_ACCESS_KEY_ENV_VAR = "AWS_ACCESS_KEY";
@@ -38,11 +43,26 @@ public class AWSCredentials {
 
     private String region;
 
-    public AWSCredentials(String awsAccessKey, String awsSecretKey, String sessionToken) {
+    /**
+     * Constructs a new {@code AWSCredentials} instance.
+     *
+     * @param awsAccessKey the access key
+     * @param awsSecretKey the secret key
+     * @param sessionToken the session token
+     */
+    public AwsCredentials(String awsAccessKey, String awsSecretKey, String sessionToken) {
         this(awsAccessKey, awsSecretKey, sessionToken, null);
     }
 
-    public AWSCredentials(
+    /**
+     * Constructs a new {@code AWSCredentials} instance.
+     *
+     * @param awsAccessKey the access key
+     * @param awsSecretKey the secret key
+     * @param sessionToken the session token
+     * @param region the AWS region name
+     */
+    public AwsCredentials(
             String awsAccessKey, String awsSecretKey, String sessionToken, String region) {
         this.awsAccessKey = awsAccessKey.trim();
         this.awsSecretKey = awsSecretKey.trim();
@@ -54,76 +74,136 @@ public class AWSCredentials {
         }
     }
 
+    /**
+     * Returns the access key.
+     *
+     * @return the access key
+     */
     public String getAWSAccessKeyId() {
         return awsAccessKey;
     }
 
+    /**
+     * Returns the secret key.
+     *
+     * @return the secret key
+     */
     public String getAWSSecretKey() {
         return awsSecretKey;
     }
 
+    /**
+     * Returns the session token.
+     *
+     * @return the session token
+     */
     public String getSessionToken() {
         return sessionToken;
     }
 
+    /**
+     * Returns the AWS region name.
+     *
+     * @return the AWS region name
+     */
     public String getRegion() {
         return region;
     }
 
-    public static AWSCredentials getCredentials(String profile) {
+    /**
+     * Returns the {@code AWSCredentials} from profile name.
+     *
+     * @param profile the profile name
+     * @return the {@code AWSCredentials}
+     */
+    public static AwsCredentials getCredentials(String profile) {
         if (!StringUtils.isEmpty(profile)) {
             return loadFromProfile(profile);
         }
 
-        String accessKey = System.getenv(ACCESS_KEY_ENV_VAR);
+        String accessKey = Utils.getEnvOrSystemProperty(ACCESS_KEY_ENV_VAR);
         if (accessKey == null) {
-            accessKey = System.getenv(ALTERNATE_ACCESS_KEY_ENV_VAR);
+            accessKey = Utils.getEnvOrSystemProperty(ALTERNATE_ACCESS_KEY_ENV_VAR);
         }
-        String secretKey = System.getenv(SECRET_KEY_ENV_VAR);
+        String secretKey = Utils.getEnvOrSystemProperty(SECRET_KEY_ENV_VAR);
         if (secretKey == null) {
-            secretKey = System.getenv(ALTERNATE_SECRET_KEY_ENV_VAR);
+            secretKey = Utils.getEnvOrSystemProperty(ALTERNATE_SECRET_KEY_ENV_VAR);
         }
-        String sessionToken = System.getenv(AWS_SESSION_TOKEN_ENV_VAR);
+        String sessionToken = Utils.getEnvOrSystemProperty(AWS_SESSION_TOKEN_ENV_VAR);
 
         if (!StringUtils.isEmpty(accessKey) && !StringUtils.isEmpty(secretKey)) {
-            return new AWSCredentials(accessKey, secretKey, sessionToken);
+            return new AwsCredentials(accessKey, secretKey, sessionToken);
         }
 
         accessKey = System.getProperty(ACCESS_KEY_SYSTEM_PROPERTY);
         secretKey = System.getProperty(SECRET_KEY_SYSTEM_PROPERTY);
         sessionToken = System.getProperty(SESSION_TOKEN_SYSTEM_PROPERTY);
         if (!StringUtils.isEmpty(accessKey) && !StringUtils.isEmpty(secretKey)) {
-            return new AWSCredentials(accessKey, secretKey, sessionToken);
+            return new AwsCredentials(accessKey, secretKey, sessionToken);
         }
 
         String cred =
                 Ec2Utils.readMetadata("identity-credentials/ec2/security-credentials/ec2-instance");
+        if (cred == null) {
+            cred = loadFromEksMetadata();
+        }
         if (cred != null && !cred.isEmpty()) {
-            return JsonUtils.GSON.fromJson(cred, AWSCredentials.class);
+            return JsonUtils.GSON.fromJson(cred, AwsCredentials.class);
         }
 
         return loadFromProfile(getDefaultProfileName());
     }
 
-    private static AWSCredentials loadFromProfile(String profile) {
-        File home = new File(System.getProperty("user.home"), ".aws");
-        if (!home.exists()) {
+    private static String loadFromEksMetadata() {
+        String url = Utils.getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+        if (url == null) {
+            url = Utils.getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+            if (url != null) {
+                url = "http://169.254.170.2" + url;
+            }
+        }
+        if (url != null) {
+            try (InputStream is = Utils.openUrl(url)) {
+                return Utils.toString(is);
+            } catch (IOException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static AwsCredentials loadFromProfile(String profile) {
+        String file = Utils.getEnvOrSystemProperty("AWS_SHARED_CREDENTIALS_FILE");
+        if (file != null) {
+            Path profileFile = Paths.get(file);
+            if (Files.isRegularFile(profileFile)) {
+                return loadProfileCredentials(profileFile, profile);
+            }
             return null;
         }
-        File profileFile = new File(home, "credentials");
-        if (profileFile.exists() && profileFile.isFile()) {
+        Path dir = Paths.get(System.getProperty("user.home")).resolve(".aws");
+        Path profileFile = dir.resolve("credentials");
+        if (Files.isRegularFile(profileFile)) {
             return loadProfileCredentials(profileFile, profile);
         }
 
-        profileFile = new File(home, "config");
-        if (profileFile.exists() && profileFile.isFile()) {
+        file = Utils.getEnvOrSystemProperty("AWS_CONFIG_FILE");
+        if (file != null) {
+            profileFile = Paths.get(file);
+            if (Files.isRegularFile(profileFile)) {
+                return loadProfileCredentials(profileFile, profile);
+            }
+            return null;
+        }
+        profileFile = dir.resolve("config");
+        if (Files.isRegularFile(profileFile)) {
             return loadProfileCredentials(profileFile, profile);
         }
         return null;
     }
 
     private static String getDefaultProfileName() {
-        String profileName = System.getenv(AWS_PROFILE_ENVIRONMENT_VARIABLE);
+        String profileName = Utils.getEnvOrSystemProperty(AWS_PROFILE_ENVIRONMENT_VARIABLE);
         if (!StringUtils.isEmpty(profileName)) {
             return profileName;
         }
@@ -136,19 +216,19 @@ public class AWSCredentials {
         return DEFAULT_PROFILE_NAME;
     }
 
-    private static AWSCredentials loadProfileCredentials(File file, String profile) {
+    private static AwsCredentials loadProfileCredentials(Path file, String profile) {
         Map<String, String> map = loadProfile(file, profile);
         String accessKey = map.get("aws_access_key_id");
         String secretKey = map.get("aws_secret_access_key");
         String sessionToken = map.get("aws_session_token");
         String region = map.get("region");
         if (!StringUtils.isEmpty(accessKey) && !StringUtils.isEmpty(secretKey)) {
-            return new AWSCredentials(accessKey, secretKey, sessionToken, region);
+            return new AwsCredentials(accessKey, secretKey, sessionToken, region);
         }
         return null;
     }
 
-    private static Map<String, String> loadProfile(File file, String profile) {
+    private static Map<String, String> loadProfile(Path file, String profile) {
         Map<String, String> map = new ConcurrentHashMap<>();
         try (Scanner scanner = new Scanner(file, StandardCharsets.UTF_8)) {
             boolean profileFound = false;

@@ -14,17 +14,17 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
-public final class TokenUtils {
+final class TokenUtils {
 
-    private static final HuggingFaceTokenizer TOKENIZER = getTokenizer();
+    private static HuggingFaceTokenizer tokenizer = getTokenizer();
 
     private TokenUtils() {}
 
     static int countTokens(List<? extends CharSequence> list) {
         int count = 0;
         for (CharSequence item : list) {
-            if (TOKENIZER != null) {
-                Encoding encoding = TOKENIZER.encode(item.toString(), false);
+            if (tokenizer != null) {
+                Encoding encoding = tokenizer.encode(item.toString());
                 count += encoding.getIds().length;
             } else {
                 String[] token = item.toString().split("\\s");
@@ -34,36 +34,31 @@ public final class TokenUtils {
         return count;
     }
 
+    static void setTokenizer() {
+        tokenizer = getTokenizer();
+    }
+
     @SuppressWarnings("PMD.SystemPrintln")
     private static HuggingFaceTokenizer getTokenizer() {
         try {
             Path cacheDir = Utils.getEngineCacheDir("tokenizers");
             Platform platform = Platform.detectPlatform("tokenizers");
             String classifier = platform.getClassifier();
+            String flavor = platform.getFlavor();
             String version = platform.getVersion();
-            Path dir = cacheDir.resolve(version + '-' + classifier);
-            String libName = System.mapLibraryName("tokenizers");
-            Path path = dir.resolve(libName);
-            if (!Files.exists(path)) {
-                Files.createDirectories(dir);
-                String djlVersion = Engine.getDjlVersion().replaceAll("-SNAPSHOT", "");
-                String url =
-                        "https://publish.djl.ai/tokenizers/"
-                                + version.split("-")[0]
-                                + "/jnilib/"
-                                + djlVersion
-                                + '/'
-                                + classifier
-                                + '/'
-                                + libName;
-                DownloadUtils.download(new URL(url), path, null);
+            Path dir = cacheDir.resolve(version + '-' + flavor + '-' + classifier);
+            downloadLibs(dir, version, classifier, System.mapLibraryName("tokenizers"));
+            if (classifier.startsWith("win-")) {
+                downloadLibs(dir, version, classifier, "libwinpthread-1.dll");
+                downloadLibs(dir, version, classifier, "libgcc_s_seh-1.dll");
+                downloadLibs(dir, version, classifier, "libstdc++-6.dll");
             }
         } catch (IOException e) {
             throw new IllegalArgumentException("Failed to load HuggingFace tokenizer.", e);
         }
 
         HuggingFaceTokenizer.Builder builder = HuggingFaceTokenizer.builder();
-        String name = System.getenv("TOKENIZER");
+        String name = Utils.getEnvOrSystemProperty("TOKENIZER");
         if (name != null) {
             Path path = Paths.get(name);
             if (Files.exists(path)) {
@@ -72,7 +67,11 @@ public final class TokenUtils {
                 builder.optTokenizerName(name);
             }
             try {
-                return builder.build();
+                String maxLength = Utils.getEnvOrSystemProperty("MAX_LENGTH");
+                if (maxLength != null) {
+                    builder.optMaxLength(Integer.parseInt(maxLength));
+                }
+                return builder.optAddSpecialTokens(false).build();
             } catch (Exception e) {
                 AwsCurl.logger.warn("", e);
                 System.out.println(
@@ -83,5 +82,30 @@ public final class TokenUtils {
             }
         }
         return null;
+    }
+
+    private static void downloadLibs(Path dir, String version, String classifier, String libName)
+            throws IOException {
+        Path path = dir.resolve(libName);
+        if (!Files.exists(path)) {
+            Files.createDirectories(dir);
+            String djlVersion = Engine.getDjlVersion().replaceAll("-SNAPSHOT", "");
+            String encodedLibName;
+            if (libName.contains("++")) {
+                encodedLibName = libName.replaceAll("\\+\\+", "%2B%2B");
+            } else {
+                encodedLibName = libName;
+            }
+            String url =
+                    "https://publish.djl.ai/tokenizers/"
+                            + version.split("-")[0]
+                            + "/jnilib/"
+                            + djlVersion
+                            + '/'
+                            + classifier
+                            + "/cpu/"
+                            + encodedLibName;
+            DownloadUtils.download(new URL(url), path, null);
+        }
     }
 }

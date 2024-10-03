@@ -1,6 +1,12 @@
 package com.amazonaws.awscurl;
 
+import ai.djl.repository.FilenameUtils;
 import ai.djl.util.RandomUtils;
+import ai.djl.util.Utils;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -8,9 +14,6 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.output.NullOutputStream;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -39,6 +42,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -53,6 +57,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+/** The utility class to run curl like command. */
 @SuppressWarnings("PMD.SystemPrintln")
 public final class AwsCurl {
 
@@ -71,8 +76,19 @@ public final class AwsCurl {
 
     private AwsCurl() {}
 
+    /**
+     * The main entrypoint.
+     *
+     * @param args the command line arguments.
+     */
     @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
     public static void main(String[] args) {
+        run(args);
+    }
+
+    @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
+    static Result run(String[] args) {
+        Result ret = new Result();
         String jarName = getJarName();
         Options options = Config.getOptions();
         DefaultParser parser = new DefaultParser();
@@ -81,14 +97,16 @@ public final class AwsCurl {
                     || "-h".equalsIgnoreCase(args[0])
                     || "--help".equalsIgnoreCase(args[0])) {
                 printHelp(jarName, options);
-                return;
+                return ret;
             }
 
             CommandLine cmd = parser.parse(options, args, null, false);
             List<String> cmdArgs = cmd.getArgList();
             if (cmdArgs.isEmpty()) {
+                System.out.println("Missing URL in command line.");
                 printHelp(jarName, options);
-                return;
+                ret.setHasError();
+                return ret;
             }
             Config config = new Config(cmd);
             if (config.isVerbose()) {
@@ -109,27 +127,48 @@ public final class AwsCurl {
                     logger.debug(null, e);
                 }
             }
+            if (config.getError() != null) {
+                System.out.println(config.getError());
+                ret.setHasError();
+                return ret;
+            }
 
             String url = config.getUrl(cmdArgs.get(0));
             URI uri;
             try {
+                URI rawUri = new URI(url);
+                String scheme = rawUri.getScheme();
+                if (scheme == null || !scheme.startsWith("http")) {
+                    System.err.println("Only HTTP url is supported: " + url);
+                    ret.setHasError();
+                    return ret;
+                }
+                String path = rawUri.getPath().replace(":", "%3A");
+                String queryString = rawUri.getRawQuery();
+                url = scheme + "://" + rawUri.getRawAuthority() + path;
+                if (queryString != null) {
+                    url += '?' + queryString;
+                }
                 uri = new URI(url);
             } catch (URISyntaxException e) {
                 System.err.println("Invalid url: " + url);
-                return;
+                ret.setHasError();
+                return ret;
             }
 
             String serviceName = config.getServiceName();
-            AWS4Signer signer;
+            AwsV4Signer signer;
             if (serviceName != null) {
-                AWSCredentials credentials = AWSCredentials.getCredentials(config.getProfile());
+                AwsCredentials credentials = AwsCredentials.getCredentials(config.getProfile());
                 if (credentials == null) {
                     System.err.println("Could not load AWSCredentials.");
-                    return;
+                    ret.setHasError();
+                    return ret;
                 }
                 if (StringUtils.isEmpty(credentials.getAWSAccessKeyId())) {
                     System.err.println("Anonymous credentials is not supported.");
-                    return;
+                    ret.setHasError();
+                    return ret;
                 }
                 String region = config.getRegion();
                 if (region == null) {
@@ -138,20 +177,21 @@ public final class AwsCurl {
                         region = credentials.getRegion();
                         if (region == null) {
                             System.err.println("Not able to obtain region name from profile.");
-                            return;
+                            ret.setHasError();
+                            return ret;
                         }
                     }
                 }
-                signer = new AWS4Signer(serviceName, region, credentials);
+                signer = new AwsV4Signer(serviceName, region, credentials);
             } else {
                 signer = null;
             }
 
             boolean insecure = config.isInsecure();
             boolean printHeader = config.isInclude() || config.isVerbose();
-
             int clients = config.getClients();
             int nRequests = config.getNumberOfRequests();
+
             AtomicInteger totalReq = new AtomicInteger(clients * nRequests);
             final List<Long> success = Collections.synchronizedList(new ArrayList<>());
             final List<Long> firstTokens = Collections.synchronizedList(new ArrayList<>());
@@ -160,6 +200,10 @@ public final class AwsCurl {
 
             ExecutorService executor = Executors.newFixedThreadPool(clients);
             ArrayList<Callable<Void>> tasks = new ArrayList<>(clients);
+            long stopTime = config.getStopTime();
+            if (stopTime != Long.MAX_VALUE) {
+                logger.info("Benchmark will stop at: {}", new Date(stopTime));
+            }
             for (int i = 0; i < clients; ++i) {
                 final int clientId = i;
                 tasks.add(
@@ -169,8 +213,9 @@ public final class AwsCurl {
                                 Thread.sleep(delay);
                             }
                             OutputStream os = config.getOutput(clientId);
-                            long[] requestTime = {0L, 0L};
-                            while (totalReq.getAndDecrement() > 0) {
+                            long[] requestTime = {0L, -1L};
+                            while (totalReq.getAndDecrement() > 0
+                                    && System.currentTimeMillis() < stopTime) {
                                 SignableRequest request = new SignableRequest(serviceName, uri);
                                 request.setContent(config.getRequestBody());
                                 request.setHeaders(config.getRequestHeaders());
@@ -178,7 +223,7 @@ public final class AwsCurl {
                                 request.setSigner(signer);
                                 request.sign();
                                 requestTime[0] = 0L;
-                                requestTime[1] = 0L;
+                                requestTime[1] = -1L;
                                 HttpResponse resp =
                                         HttpClient.sendRequest(
                                                 request,
@@ -254,56 +299,52 @@ public final class AwsCurl {
                 }
             }
 
-            if (nRequests > 1 && clients > 0) {
-                int successReq = success.size();
-                int errorReq = errors.get();
-                int totalRequest = successReq + errorReq;
-                if (totalRequest == 0) {
-                    totalRequest = 1;
-                }
-                Collections.sort(success);
-                long totalTime = success.stream().mapToLong(val -> val).sum();
-                logger.debug("Total request time: {} ms", totalTime / 1000000d);
+            int successReq = success.size();
+            int errorReq = errors.get();
+            int totalRequests = successReq + errorReq;
+            if (totalRequests == 0) {
+                totalRequests = 1;
+            }
+            Collections.sort(success);
+            long totalTime = success.stream().mapToLong(val -> val).sum();
+            ret.setTotalTimeMills(delta / 1000000d);
+            ret.setTotalRequests(totalRequests);
+            ret.setFailedRequests(errorReq);
+            ret.setErrorRate(100d * errorReq / totalRequests);
+            ret.setConcurrentClients(clients);
 
-                System.out.printf("Total time: %.2f ms.%n", delta / 1000000d);
-                System.out.printf(
-                        "Non 200 responses: %d, error rate: %.2f%n",
-                        errorReq, 100d * errorReq / totalRequest);
-                System.out.println("Concurrent clients: " + clients);
-                System.out.println("Total requests: " + totalRequest);
-                if (successReq > 0) {
-                    System.out.printf(
-                            "TPS: %.2f/s%n", successReq * 1000000000d / totalTime * clients);
-                    if (tokens != null) {
-                        int totalTokens = tokens.get();
-                        String tokenizer = System.getenv("TOKENIZER");
-                        String n = tokenizer == null ? "word" : "token";
-                        System.out.printf("Total %s: %d%n", n, totalTokens);
-                        System.out.printf("%s/req: %d%n", n, totalTokens / totalRequest);
-                        System.out.printf(
-                                "%s/s: %.2f/s%n",
-                                n, totalTokens * 1000000000d / totalTime * clients);
-                    }
-                    System.out.printf(
-                            "Average Latency: %.2f ms.%n", totalTime / 1000000d / successReq);
-                    System.out.printf("P50: %.2f ms.%n", success.get(successReq / 2) / 1000000d);
-                    System.out.printf(
-                            "P90: %.2f ms.%n", success.get(successReq * 9 / 10) / 1000000d);
-                    System.out.printf(
-                            "P99: %.2f ms.%n", success.get(successReq * 99 / 100) / 1000000d);
-                }
-                if (!firstTokens.isEmpty()) {
-                    long sum = firstTokens.stream().mapToLong(val -> val).sum();
-                    int size = firstTokens.size();
-                    System.out.printf("Average first bytes: %.2f ms.%n", sum / 1000000d / size);
+            if (successReq > 0) {
+                ret.setTps(successReq * 1000000000d / totalTime * clients);
+                ret.setAverageLatency(totalTime / 1000000d / successReq);
+                ret.setP50Latency(success.get(successReq / 2) / 1000000d);
+                ret.setP90Latency(success.get(successReq * 9 / 10) / 1000000d);
+                ret.setP99Latency(success.get(successReq * 99 / 100) / 1000000d);
+                if (tokens != null) {
+                    int totalTokens = tokens.get();
+                    ret.setTotalTokens(totalTokens);
+                    ret.setTokenPerRequest(totalTokens / totalRequests);
+                    ret.setTokenThroughput(totalTokens * 1000000000d / totalTime * clients);
+                    ret.setAverageTokenLatency(totalTime / 1000000d * clients / totalTokens);
                 }
             }
+            if (!firstTokens.isEmpty()) {
+                Collections.sort(firstTokens);
+                long sum = firstTokens.stream().mapToLong(val -> val).sum();
+                int size = firstTokens.size();
+                ret.setTimeToFirstByte(sum / 1000000d / size);
+                ret.setP50TimeToFirstByte(firstTokens.get(size / 2) / 1000000d);
+                ret.setP90TimeToFirstByte(firstTokens.get(size * 9 / 10) / 1000000d);
+                ret.setP99TimeToFirstByte(firstTokens.get(size * 99 / 100) / 1000000d);
+            }
+            AwsCurl.logger.debug("Total request time: {} ms", totalTime / 1000000d);
+            ret.print(config.isJsonOutput(), config.getJsonOutputPath());
         } catch (IOException | InterruptedException e) {
             System.err.println(e.getMessage());
         } catch (ParseException e) {
             System.err.println(e.getMessage());
             printHelp(jarName, options);
         }
+        return ret;
     }
 
     private static void printHelp(String jarFileName, Options options) {
@@ -349,7 +390,7 @@ public final class AwsCurl {
         if (matcher.matches()) {
             return matcher.group(3);
         }
-        return null;
+        return Utils.getEnvOrSystemProperty("AWS_REGION");
     }
 
     static String getNextToken(Header header) {
@@ -372,8 +413,6 @@ public final class AwsCurl {
         private int connectTimeout;
         private String[] data;
         private String[] dataRaw;
-        private String[] dataAscii;
-        private String[] dataBinary;
         private String[] dataUrlencode;
         private String[] form;
         private String[] formString;
@@ -382,18 +421,21 @@ public final class AwsCurl {
         private String[] headers;
         private boolean include;
         private boolean insecure;
-        private String referer;
+        private boolean jsonOutput;
+        private String jsonOutputPath;
         private String output;
-        private String userAgent;
         private String uploadFile;
         private boolean verbose;
         private int nRequests;
         private int clients;
         private boolean countTokens;
         private List<byte[]> dataset;
+        private JsonObject extraParameters;
         private String jq;
         private int delay;
+        private int duration;
         private boolean random;
+        private String error;
         private AtomicInteger index;
 
         public Config(CommandLine cmd) throws IOException {
@@ -409,16 +451,23 @@ public final class AwsCurl {
                     connectTimeout = 30000;
                 }
             } catch (NumberFormatException e) {
-                connectTimeout = 30000;
+                error = "Invalid connect-timeout: " + cmd.getOptionValue("connect-timeout");
             }
+            headers = cmd.getOptionValues("header");
             String dataDirectory = cmd.getOptionValue("dataset");
             if (dataDirectory != null) {
+                String val = cmd.getOptionValue("extra-parameters");
+                if (val != null) {
+                    try {
+                        extraParameters = JsonUtils.GSON.fromJson(val, JsonObject.class);
+                    } catch (JsonParseException e) {
+                        error = "extra-parameters must be a JsonObject";
+                    }
+                }
                 loadDataset(dataDirectory);
             }
             data = cmd.getOptionValues("data");
             dataRaw = cmd.getOptionValues("data-raw");
-            dataAscii = cmd.getOptionValues("data-ascii");
-            dataBinary = cmd.getOptionValues("data-binary");
             dataUrlencode = cmd.getOptionValues("data-urlencode");
             form = cmd.getOptionValues("form");
             formString = cmd.getOptionValues("form-string");
@@ -426,31 +475,39 @@ public final class AwsCurl {
                 requestMethod = cmd.getOptionValue("request");
             }
             forceGet = cmd.hasOption("get");
-            headers = cmd.getOptionValues("header");
             include = cmd.hasOption("include");
             insecure = cmd.hasOption("insecure");
+            jsonOutput = cmd.hasOption("json-output");
+            jsonOutputPath = cmd.getOptionValue("json-path");
+            if (jsonOutputPath != null) {
+                jsonOutput = true;
+            }
             output = cmd.getOptionValue("output");
-            referer = cmd.getOptionValue("referer");
             uploadFile = cmd.getOptionValue("upload-file");
-            userAgent = cmd.getOptionValue("user-agent");
             verbose = cmd.hasOption("verbose");
             if (cmd.hasOption("repeat")) {
                 try {
                     nRequests = Integer.parseInt(cmd.getOptionValue("repeat"));
                 } catch (NumberFormatException e) {
-                    nRequests = 1;
+                    nRequests = -1;
                 }
             } else {
                 nRequests = 1;
+            }
+            if (nRequests <= 0) {
+                error = "Invalid number of requests: " + cmd.getOptionValue("repeat");
             }
             if (cmd.hasOption("clients")) {
                 try {
                     clients = Integer.parseInt(cmd.getOptionValue("clients"));
                 } catch (NumberFormatException e) {
-                    clients = 1;
+                    clients = -1;
                 }
             } else {
                 clients = 1;
+            }
+            if (clients <= 0) {
+                error = "Invalid concurrent clients: " + cmd.getOptionValue("clients");
             }
             countTokens = cmd.hasOption("tokens");
             jq = cmd.getOptionValue("jq");
@@ -477,10 +534,30 @@ public final class AwsCurl {
                     }
                 }
             }
+            String seed = cmd.getOptionValue("seed");
+            if (seed != null) {
+                try {
+                    RandomUtils.RANDOM.setSeed(Long.parseLong(seed));
+                } catch (NumberFormatException e) {
+                    error = "Invalid seed: " + seed;
+                }
+            }
+            if (cmd.hasOption("duration")) {
+                try {
+                    duration = Integer.parseInt(cmd.getOptionValue("duration"));
+                } catch (NumberFormatException e) {
+                    error = "Invalid duration: " + cmd.getOptionValue("duration");
+                }
+            }
         }
 
         private void loadDataset(String dir) throws IOException {
             Path path = Paths.get(dir);
+            if (Files.notExists(path)) {
+                error = "dataset directory not found: " + dir;
+                return;
+            }
+            setContentType();
             if (Files.isDirectory(path)) {
                 System.out.println("Loading dataset from directory: " + path);
                 try (Stream<Path> stream = Files.list(path)) {
@@ -488,14 +565,14 @@ public final class AwsCurl {
                             p -> {
                                 try {
                                     if (Files.isRegularFile(p) && !Files.isHidden(p)) {
-                                        byte[] buf = Files.readAllBytes(p);
-                                        if (buf.length == 0) {
+                                        String buf = Files.readString(p);
+                                        if (buf.isBlank()) {
                                             System.out.println("empty dataset file: " + p);
                                         }
-                                        dataset.add(buf);
+                                        addToDataSet(buf);
                                     }
                                 } catch (IOException e) {
-                                    throw new IllegalStateException(e);
+                                    error = "Failed to read dataset file: " + p;
                                 }
                             });
                 }
@@ -504,13 +581,42 @@ public final class AwsCurl {
                 try (BufferedReader reader = Files.newBufferedReader(path)) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        dataset.add(line.getBytes(StandardCharsets.UTF_8));
+                        addToDataSet(line);
                     }
                 }
             }
+            if (dataset.isEmpty()) {
+                error = "Failed to read dataset from: " + dir;
+            }
         }
 
-        public static Options getOptions() {
+        private void addToDataSet(String data) {
+            if ("application/json".equalsIgnoreCase(contentType) && extraParameters != null) {
+                JsonElement element = JsonUtils.GSON.fromJson(data, JsonElement.class);
+                if (element.isJsonObject()) {
+                    JsonObject obj = element.getAsJsonObject();
+                    JsonObject param = obj.getAsJsonObject("parameters");
+                    JsonObject targetParam = extraParameters;
+                    if (extraParameters.has("parameters")) {
+                        targetParam = extraParameters.getAsJsonObject("parameters");
+                    }
+                    if (param == null) {
+                        obj.add("parameters", targetParam);
+                    } else {
+                        for (Map.Entry<String, JsonElement> entry : targetParam.entrySet()) {
+                            param.add(entry.getKey(), entry.getValue());
+                        }
+                    }
+                    if (extraParameters.has("stream")) {
+                        obj.add("stream", extraParameters.get("stream"));
+                    }
+                    data = JsonUtils.GSON.toJson(obj);
+                }
+            }
+            dataset.add(data.getBytes(StandardCharsets.UTF_8));
+        }
+
+        static Options getOptions() {
             Options options = new Options();
             options.addOption(
                     Option.builder("n")
@@ -535,11 +641,6 @@ public final class AwsCurl {
                             .build());
             options.addOption(
                     Option.builder()
-                            .longOpt("compressed")
-                            .desc("Request compressed response (using deflate or gzip)")
-                            .build());
-            options.addOption(
-                    Option.builder()
                             .longOpt("connect-timeout")
                             .hasArg()
                             .argName("SECONDS")
@@ -553,32 +654,25 @@ public final class AwsCurl {
                             .desc("dataset directory")
                             .build());
             options.addOption(
-                    Option.builder("d")
-                            .longOpt("data")
-                            .hasArgs()
-                            .argName("DATA")
-                            .desc("HTTP POST data")
+                    Option.builder()
+                            .longOpt("extra-parameters")
+                            .hasArg()
+                            .argName("EXTRA-PARAMETERS")
+                            .desc("extra parameters for json dataset")
                             .build());
             options.addOption(
-                    Option.builder()
-                            .longOpt("data-raw")
+                    Option.builder("d")
+                            .longOpt("data")
                             .hasArgs()
                             .argName("DATA")
                             .desc("HTTP POST data, '@' allowed")
                             .build());
             options.addOption(
                     Option.builder()
-                            .longOpt("data-ascii")
+                            .longOpt("data-raw")
                             .hasArgs()
                             .argName("DATA")
-                            .desc("HTTP POST ASCII data")
-                            .build());
-            options.addOption(
-                    Option.builder()
-                            .longOpt("data-binary")
-                            .hasArgs()
-                            .argName("DATA")
-                            .desc("HTTP POST binary data")
+                            .desc("HTTP POST data (no file)")
                             .build());
             options.addOption(
                     Option.builder()
@@ -592,14 +686,14 @@ public final class AwsCurl {
                             .longOpt("form")
                             .hasArgs()
                             .argName("CONTENT")
-                            .desc("Specify HTTP multipart POST data")
+                            .desc("Specify HTTP multipart POST data, '@' allowed")
                             .build());
             options.addOption(
                     Option.builder()
                             .longOpt("form-string")
                             .hasArgs()
                             .argName("STRING")
-                            .desc("Specify HTTP multipart POST data")
+                            .desc("Specify HTTP multipart POST data (no file)")
                             .build());
             options.addOption(
                     Option.builder("G")
@@ -632,8 +726,6 @@ public final class AwsCurl {
                             .desc("Write to FILE instead of stdout")
                             .build());
             options.addOption(
-                    Option.builder("e").longOpt("referer").hasArg().desc("Referer URL").build());
-            options.addOption(
                     Option.builder("X")
                             .longOpt("request")
                             .hasArg()
@@ -646,13 +738,6 @@ public final class AwsCurl {
                             .hasArg()
                             .argName("FILE")
                             .desc("Transfer FILE to destination")
-                            .build());
-            options.addOption(
-                    Option.builder("A")
-                            .longOpt("user-agent")
-                            .hasArg()
-                            .argName("STRING")
-                            .desc("Send User-Agent STRING to server")
                             .build());
             options.addOption(
                     Option.builder("H")
@@ -688,13 +773,39 @@ public final class AwsCurl {
                             .desc("Json query expression for token output")
                             .build());
             options.addOption(
+                    Option.builder("P")
+                            .longOpt("json-output")
+                            .desc("print out json format")
+                            .build());
+            options.addOption(
+                    Option.builder()
+                            .longOpt("json-path")
+                            .hasArg()
+                            .argName("JSON_PATH")
+                            .desc("Save the output json to a file")
+                            .build());
+            options.addOption(
                     Option.builder()
                             .longOpt("delay")
                             .hasArg()
                             .argName("DELAY")
                             .desc(
-                                    "Delay in millis between each request (e.g. 10 or rand(100,"
+                                    "Delay in millis for initial requests (e.g. 10 or rand(100,"
                                             + " 200))")
+                            .build());
+            options.addOption(
+                    Option.builder()
+                            .longOpt("seed")
+                            .hasArg()
+                            .argName("RANDOM-SEED")
+                            .desc("Random seed")
+                            .build());
+            options.addOption(
+                    Option.builder()
+                            .longOpt("duration")
+                            .hasArg()
+                            .argName("DURATION")
+                            .desc("Duration of the test in seconds")
                             .build());
             return options;
         }
@@ -715,6 +826,10 @@ public final class AwsCurl {
             return connectTimeout;
         }
 
+        public String getJsonOutputPath() {
+            return jsonOutputPath;
+        }
+
         public boolean isInclude() {
             return include;
         }
@@ -723,12 +838,16 @@ public final class AwsCurl {
             return insecure;
         }
 
+        public boolean isJsonOutput() {
+            return jsonOutput;
+        }
+
         public OutputStream getOutput(int clientId) throws IOException {
             if (output != null) {
                 return Files.newOutputStream(Paths.get(output + '.' + clientId));
             }
             if (nRequests > 1) {
-                return NullOutputStream.NULL_OUTPUT_STREAM;
+                return NullOutputStream.INSTANCE;
             }
             return System.out;
         }
@@ -741,16 +860,15 @@ public final class AwsCurl {
             return nRequests;
         }
 
+        public long getStopTime() {
+            if (duration > 0) {
+                return System.currentTimeMillis() + duration * 1000L;
+            }
+            return Long.MAX_VALUE;
+        }
+
         public int getClients() {
             return clients;
-        }
-
-        public String[] getForm() {
-            return form;
-        }
-
-        public String[] getFormString() {
-            return formString;
         }
 
         public String getRequestMethod() {
@@ -768,10 +886,6 @@ public final class AwsCurl {
                     String key = pair[0].trim();
                     if ("content-type".equalsIgnoreCase(key)) {
                         key = "Content-Type";
-                    } else if ("Referer".equalsIgnoreCase(key)) {
-                        key = "Referer";
-                    } else if ("User-Agent".equalsIgnoreCase(key)) {
-                        key = "User-Agent";
                     } else if ("Content-Length".equalsIgnoreCase(key)) {
                         key = "Content-Length";
                     }
@@ -783,12 +897,6 @@ public final class AwsCurl {
             if (contentType != null) {
                 map.putIfAbsent("Content-Type", contentType);
             }
-            if (referer != null) {
-                map.put("Referer", referer);
-            }
-            if (userAgent != null) {
-                map.put("User-Agent", userAgent);
-            }
 
             return map;
         }
@@ -798,16 +906,10 @@ public final class AwsCurl {
                 return url;
             }
 
-            if (data != null
-                    || dataAscii != null
-                    || dataBinary != null
-                    || dataRaw != null
-                    || dataUrlencode != null) {
+            if (data != null || dataRaw != null || dataUrlencode != null) {
                 contentType = null;
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 addUrlEncodedData(bos, data, 1);
-                addUrlEncodedData(bos, dataAscii, 1);
-                addUrlEncodedData(bos, dataBinary, 1);
                 addUrlEncodedData(bos, dataRaw, 2);
                 addUrlEncodedData(bos, dataUrlencode, 3);
                 bos.close();
@@ -834,7 +936,7 @@ public final class AwsCurl {
              * Priority:
              *  1. --dataset
              *  2. --form, --form-string
-             *  3. --data, --data-ascii, --data-binary, --data-raw, --data-urlencode
+             *  3. --data, --data-raw, --data-urlencode
              *  4. --upload-file
              */
             if (!dataset.isEmpty()) {
@@ -855,17 +957,11 @@ public final class AwsCurl {
                 return bos.toByteArray();
             }
 
-            if (data != null
-                    || dataAscii != null
-                    || dataBinary != null
-                    || dataRaw != null
-                    || dataUrlencode != null) {
+            if (data != null || dataRaw != null || dataUrlencode != null) {
                 requestMethod = requestMethod == null ? "POST" : requestMethod;
                 contentType = ContentType.APPLICATION_FORM_URLENCODED.toString();
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 addUrlEncodedData(bos, data, 1);
-                addUrlEncodedData(bos, dataAscii, 1);
-                addUrlEncodedData(bos, dataBinary, 1);
                 addUrlEncodedData(bos, dataRaw, 2);
                 addUrlEncodedData(bos, dataUrlencode, 3);
                 bos.close();
@@ -874,15 +970,7 @@ public final class AwsCurl {
 
             if (uploadFile != null) {
                 requestMethod = requestMethod == null ? "PUT" : requestMethod;
-                if (headers != null) {
-                    for (String header : headers) {
-                        String[] pair = header.split(":", 2);
-                        String key = pair[0].trim();
-                        if ("content-type".equalsIgnoreCase(key)) {
-                            contentType = pair[1].trim();
-                        }
-                    }
-                }
+                setContentType();
                 if (contentType == null) {
                     contentType = getMimeType(uploadFile).toString();
                 }
@@ -892,8 +980,26 @@ public final class AwsCurl {
             return null;
         }
 
-        public String getJsonExpression() {
-            return jq;
+        void setContentType() {
+            if (headers != null) {
+                for (String header : headers) {
+                    String[] pair = header.split(":", 2);
+                    String key = pair[0].trim();
+                    if ("content-type".equalsIgnoreCase(key)) {
+                        contentType = pair[1].trim();
+                    }
+                }
+            }
+        }
+
+        public String[] getJsonExpression() {
+            if (jq == null) {
+                return null; // NOPMD
+            }
+            if (jq.startsWith("$")) {
+                return new String[] {jq};
+            }
+            return jq.split("/");
         }
 
         public int getDelay() {
@@ -903,13 +1009,17 @@ public final class AwsCurl {
             return delay;
         }
 
+        public String getError() {
+            return error;
+        }
+
         private byte[] readFile(String fileName) throws IOException {
             Path path = Paths.get(fileName);
             if (!Files.isRegularFile(path)) {
                 throw new FileNotFoundException("File not found: " + fileName);
             }
             try (InputStream is = Files.newInputStream(path)) {
-                return IOUtils.toByteArray(is);
+                return Utils.toByteArray(is);
             }
         }
 
@@ -920,16 +1030,14 @@ public final class AwsCurl {
             }
             for (String content : data) {
                 switch (encodeType) {
-                    case 1: // data, data-ascii, data-binary
+                    case 1: // data
                         if (content.startsWith("@")) {
                             String dataFile = content.substring(1);
                             Path path = Paths.get(dataFile);
                             if (!Files.isRegularFile(path)) {
                                 throw new IOException("Invalid input file: " + dataFile);
                             }
-                            try (InputStream is = Files.newInputStream(path)) {
-                                IOUtils.copy(is, bos);
-                            }
+                            Files.copy(path, bos);
                         } else {
                             bos.write(content.getBytes(StandardCharsets.UTF_8));
                         }
@@ -968,8 +1076,8 @@ public final class AwsCurl {
 
         private byte[] readContentUrlEncoded(String content) throws IOException {
             if (content.startsWith("@")) {
-                File file = new File(content.substring(1));
-                String value = IOUtils.toString(file.toURI(), StandardCharsets.UTF_8);
+                Path file = Paths.get(content.substring(1));
+                String value = Files.readString(file);
                 return URLEncoder.encode(value, StandardCharsets.UTF_8)
                         .getBytes(StandardCharsets.UTF_8);
             }
@@ -1003,15 +1111,9 @@ public final class AwsCurl {
                         value = pair.length > 1 ? pair[1] : "";
                     }
                 }
-                if (value == null) {
-                    ContentType ct;
-                    if (StringUtils.isEmpty(type)) {
-                        ct = ContentType.TEXT_PLAIN;
-                    } else {
-                        ct = ContentType.create(type);
-                    }
-                    mb.addTextBody(key, "", ct);
-                    return;
+                if (key == null || value == null) {
+                    AwsCurl.logger.warn("Ignore invalid form data: {}", parameter);
+                    continue;
                 }
 
                 if (allowFile && value.startsWith("@")) {
@@ -1039,7 +1141,7 @@ public final class AwsCurl {
         }
 
         private ContentType getMimeType(String fileName) {
-            String ext = FilenameUtils.getExtension(fileName).toLowerCase(Locale.ENGLISH);
+            String ext = FilenameUtils.getFileType(fileName).toLowerCase(Locale.ROOT);
             switch (ext.toLowerCase(Locale.ENGLISH)) {
                 case "txt":
                 case "text":

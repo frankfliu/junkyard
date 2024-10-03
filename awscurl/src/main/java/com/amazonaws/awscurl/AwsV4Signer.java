@@ -21,7 +21,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
-public class AWS4Signer {
+/** A class to generate AWSv4 signature. */
+public class AwsV4Signer {
 
     private static final String LINE_SEPARATOR = "\n";
     private static final String AWS4_TERMINATOR = "aws4_request";
@@ -47,23 +48,45 @@ public class AWS4Signer {
 
     private String serviceName;
     private String regionName;
-    private AWSCredentials credentials;
+    private AwsCredentials credentials;
     private Date overriddenDate;
 
-    public AWS4Signer(String serviceName, String region, AWSCredentials credentials) {
+    /**
+     * Constructs a new {@code AWS4Signer} instance.
+     *
+     * @param serviceName the AWS servince name
+     * @param region the AWS region
+     * @param credentials the credentials
+     */
+    public AwsV4Signer(String serviceName, String region, AwsCredentials credentials) {
         this.serviceName = serviceName;
         this.regionName = region;
         this.credentials = credentials;
     }
 
+    /**
+     * Sets the override date.
+     *
+     * @param overriddenDate the override date
+     */
     public void setOverrideDate(Date overriddenDate) {
         this.overriddenDate = overriddenDate;
     }
 
+    /**
+     * Returns the override date.
+     *
+     * @return the override date
+     */
     public Date getOverriddenDate() {
         return overriddenDate;
     }
 
+    /**
+     * Signs the request.
+     *
+     * @param request the request
+     */
     public void sign(SignableRequest request) {
         if (credentials.getAWSAccessKeyId() == null) {
             return;
@@ -75,8 +98,8 @@ public class AWS4Signer {
             map.put(X_AMZ_SECURITY_TOKEN, sessionToken);
         }
 
-        AWS4SignerRequestParams signerParams =
-                new AWS4SignerRequestParams(
+        AwsV4SignerRequestParams signerParams =
+                new AwsV4SignerRequestParams(
                         request, overriddenDate, regionName, serviceName, AWS4_SIGNING_ALGORITHM);
 
         map.put(X_AMZ_DATE, signerParams.getFormattedSigningDateTime());
@@ -95,8 +118,15 @@ public class AWS4Signer {
         request.setSignedHeaders(map);
     }
 
+    /**
+     * Generates pre-signed request.
+     *
+     * @param request the original http request
+     * @param credentials the credential
+     * @param userSpecifiedExpirationDate the expiration date
+     */
     public void presignRequest(
-            SignableRequest request, AWSCredentials credentials, Date userSpecifiedExpirationDate) {
+            SignableRequest request, AwsCredentials credentials, Date userSpecifiedExpirationDate) {
         if (credentials.getAWSAccessKeyId() == null) {
             return;
         }
@@ -107,8 +137,8 @@ public class AWS4Signer {
             map.put(X_AMZ_SECURITY_TOKEN, sessionToken);
         }
 
-        AWS4SignerRequestParams signerRequestParams =
-                new AWS4SignerRequestParams(
+        AwsV4SignerRequestParams signerRequestParams =
+                new AwsV4SignerRequestParams(
                         request, overriddenDate, regionName, serviceName, AWS4_SIGNING_ALGORITHM);
 
         // Add the important parameters for v4 signing
@@ -145,7 +175,7 @@ public class AWS4Signer {
     }
 
     private String createStringToSign(
-            String canonicalRequest, AWS4SignerRequestParams signerParams) {
+            String canonicalRequest, AwsV4SignerRequestParams signerParams) {
         return signerParams.getSigningAlgorithm()
                 + LINE_SEPARATOR
                 + signerParams.getFormattedSigningDateTime()
@@ -156,7 +186,7 @@ public class AWS4Signer {
     }
 
     private byte[] deriveSigningKey(
-            AWSCredentials credentials, AWS4SignerRequestParams signerRequestParams) {
+            AwsCredentials credentials, AwsV4SignerRequestParams signerRequestParams) {
         return newSigningKey(
                 credentials,
                 signerRequestParams.getFormattedSigningDate(),
@@ -167,8 +197,8 @@ public class AWS4Signer {
     private String buildAuthorizationHeader(
             SignableRequest request,
             byte[] signature,
-            AWSCredentials credentials,
-            AWS4SignerRequestParams signerParams) {
+            AwsCredentials credentials,
+            AwsV4SignerRequestParams signerParams) {
         String signingCredentials = credentials.getAWSAccessKeyId() + "/" + signerParams.getScope();
 
         String credential = "Credential=" + signingCredentials;
@@ -186,8 +216,8 @@ public class AWS4Signer {
 
     private void addPreSignInformationToRequest(
             SignableRequest request,
-            AWSCredentials credentials,
-            AWS4SignerRequestParams signerParams,
+            AwsCredentials credentials,
+            AwsV4SignerRequestParams signerParams,
             String timeStamp,
             long expirationInSeconds) {
         String signingCredentials = credentials.getAWSAccessKeyId() + "/" + signerParams.getScope();
@@ -264,7 +294,7 @@ public class AWS4Signer {
     }
 
     private byte[] newSigningKey(
-            AWSCredentials credentials, String dateStamp, String regionName, String serviceName) {
+            AwsCredentials credentials, String dateStamp, String regionName, String serviceName) {
         byte[] kSecret = ("AWS4" + credentials.getAWSSecretKey()).getBytes(StandardCharsets.UTF_8);
         byte[] kDate = hmacSha256(dateStamp, kSecret);
         byte[] kRegion = hmacSha256(regionName, kDate);
