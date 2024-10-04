@@ -8,7 +8,8 @@ import requests
 
 
 def main():
-    pipe = pipeline("image-classification", "rvv-karma/Human-Action-Recognition-VIT-Base-patch16-224")
+    pipe = pipeline("image-classification",
+                    "rvv-karma/Human-Action-Recognition-VIT-Base-patch16-224")
     url = "https://images.pexels.com/photos/175658/pexels-photo-175658.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500"
     image = Image.open(requests.get(url, stream=True).raw)
 

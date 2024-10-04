@@ -20,9 +20,10 @@ from torch import nn
 
 
 class Sam2Wrapper(nn.Module):
+
     def __init__(
-            self,
-            sam_model: SAM2Base,
+        self,
+        sam_model: SAM2Base,
     ) -> None:
         super().__init__()
         self.model = sam_model
@@ -35,38 +36,41 @@ class Sam2Wrapper(nn.Module):
         ]
 
     def extract_features(
-            self,
-            input_image: torch.Tensor,
+        self,
+        input_image: torch.Tensor,
     ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         backbone_out = self.model.forward_image(input_image)
-        _, vision_feats, _, _ = self.model._prepare_backbone_features(backbone_out)
+        _, vision_feats, _, _ = self.model._prepare_backbone_features(
+            backbone_out)
         # Add no_mem_embed, which is added to the lowest rest feat. map during training on videos
         if self.model.directly_add_no_mem_embed:
             vision_feats[-1] = vision_feats[-1] + self.model.no_mem_embed
 
         feats = [
-                    feat.permute(1, 2, 0).view(1, -1, *feat_size)
-                    for feat, feat_size in zip(vision_feats[::-1], self._bb_feat_sizes[::-1])
-                ][::-1]
+            feat.permute(1, 2,
+                         0).view(1, -1, *feat_size) for feat, feat_size in zip(
+                             vision_feats[::-1], self._bb_feat_sizes[::-1])
+        ][::-1]
 
         return feats[-1], feats[0], feats[1]
 
     def forward(
-            self,
-            input_image: torch.Tensor,
-            point_coords: torch.Tensor,
-            point_labels: torch.Tensor,
+        self,
+        input_image: torch.Tensor,
+        point_coords: torch.Tensor,
+        point_labels: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         image_embed, feature_1, feature_2 = self.extract_features(input_image)
-        return self.predict(point_coords, point_labels, image_embed, feature_1, feature_2)
+        return self.predict(point_coords, point_labels, image_embed, feature_1,
+                            feature_2)
 
     def predict(
-            self,
-            point_coords: torch.Tensor,
-            point_labels: torch.Tensor,
-            image_embed: torch.Tensor,
-            feats_1: torch.Tensor,
-            feats_2: torch.Tensor,
+        self,
+        point_coords: torch.Tensor,
+        point_labels: torch.Tensor,
+        image_embed: torch.Tensor,
+        feats_1: torch.Tensor,
+        feats_2: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         concat_points = (point_coords, point_labels)
 
@@ -96,11 +100,14 @@ def main():
     else:
         device = torch.device("cpu")
 
-    predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-tiny", device=device)
+    predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-tiny",
+                                                   device=device)
     model = Sam2Wrapper(predictor.model)
 
     img = Image.open("truck.jpg")
-    input_point = torch.tensor([[500, 375], [1125, 625]], dtype=torch.float, device=device)
+    input_point = torch.tensor([[500, 375], [1125, 625]],
+                               dtype=torch.float,
+                               device=device)
     input_label = torch.tensor([[1, 1]], dtype=torch.int32, device=device)
     # input_point = torch.tensor([[500, 375]], dtype=torch.float, device=device)
     # input_label = torch.tensor([[1]], dtype=torch.int32, device=device)
@@ -110,9 +117,9 @@ def main():
     input_image = predictor._transforms(img).to(device)
     input_image = input_image[None, ...]
 
-    unnorm_coords = predictor._transforms.transform_coords(
-        input_point, normalize=True, orig_hw=(h, w)
-    )
+    unnorm_coords = predictor._transforms.transform_coords(input_point,
+                                                           normalize=True,
+                                                           orig_hw=(h, w))
     unnorm_coords = unnorm_coords[None, ...]
 
     with torch.inference_mode():
@@ -121,9 +128,7 @@ def main():
 
         low_res_masks, scores = model(input_image, unnorm_coords, input_label)
 
-        masks = predictor._transforms.postprocess_masks(
-            low_res_masks, (h, w)
-        )
+        masks = predictor._transforms.postprocess_masks(low_res_masks, (h, w))
         masks = masks > 0.0
         # logits = torch.clamp(low_res_masks, -32.0, 32.0)
 
