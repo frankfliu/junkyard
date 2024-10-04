@@ -42,12 +42,8 @@ def gen_header(batch: int):
     outputs.append(InferOutput('SLOT_SCORES__1', binary_data=True))
 
     infer_request = {
-        'inputs': [
-            input.get_tensor() for input in inputs
-        ],
-        'outputs': [
-            output.get_tensor() for output in outputs
-        ]
+        'inputs': [input.get_tensor() for input in inputs],
+        'outputs': [output.get_tensor() for output in outputs]
     }
 
     return json.dumps(infer_request)

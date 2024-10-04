@@ -23,7 +23,8 @@ def main():
     else:
         device = torch.device("cpu")
 
-    predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-tiny", device=device)
+    predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-tiny",
+                                                   device=device)
 
     img = Image.open("truck.jpg")
     input_point = np.array([[500, 375]])
@@ -32,7 +33,8 @@ def main():
 
     with torch.inference_mode():
         predictor.set_image(img)
-        masks, scores, logits = predictor.predict(input_point, input_label, input_box)
+        masks, scores, logits = predictor.predict(input_point, input_label,
+                                                  input_box)
         print(f"masks: {masks}")
         print(f"scores: {scores}")
         # print(f"logits: {logits}")

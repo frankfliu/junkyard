@@ -21,7 +21,8 @@ def main():
     for model_info in models:
         model_id = model_info.modelId
         try:
-            file = hf_hub_download(repo_id=model_id, filename="1_Pooling/config.json")
+            file = hf_hub_download(repo_id=model_id,
+                                   filename="1_Pooling/config.json")
             if os.path.exists(file):
                 with open(file, "r") as f:
                     pooling = json.load(f)

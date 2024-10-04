@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+
 class InferInput:
 
     def __init__(self, name, shape, datatype):

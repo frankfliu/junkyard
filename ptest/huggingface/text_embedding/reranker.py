@@ -26,7 +26,11 @@ def main():
     #
     # model = AutoModelForSequenceClassification.from_pretrained(model_id)
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors="pt", max_length=512)
+    inputs = tokenizer(pairs,
+                       padding=True,
+                       truncation=True,
+                       return_tensors="pt",
+                       max_length=512)
     #
     # model.eval()
     # with torch.no_grad():
@@ -43,7 +47,9 @@ def main():
     attention_mask = inputs["attention_mask"]
     token_type_ids = inputs.get("token_type_ids")
 
-    traced_model = torch.jit.trace(model.model, (input_ids, attention_mask, token_type_ids), strict=False)
+    traced_model = torch.jit.trace(model.model,
+                                   (input_ids, attention_mask, token_type_ids),
+                                   strict=False)
     torch.jit.save(traced_model, "traced.pt")
     print(scores)
 
