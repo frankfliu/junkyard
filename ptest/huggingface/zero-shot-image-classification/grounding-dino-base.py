@@ -37,7 +37,8 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     processor = AutoProcessor.from_pretrained(model_id)
-    model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id).to(device)
+    model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id).to(
+        device)
 
     image_url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     image = Image.open(requests.get(image_url, stream=True).raw)
@@ -54,14 +55,14 @@ def main():
         inputs.input_ids,
         box_threshold=0.4,
         text_threshold=0.3,
-        target_sizes=[image.size[::-1]]
-    )
+        target_sizes=[image.size[::-1]])
     result = results[0]
-    val = json.dumps({
-        "labels": result["labels"],
-        "scores": result["scores"].tolist(),
-        "boxes": result["boxes"].cpu().detach().numpy().tolist(),
-    },
+    val = json.dumps(
+        {
+            "labels": result["labels"],
+            "scores": result["scores"].tolist(),
+            "boxes": result["boxes"].cpu().detach().numpy().tolist(),
+        },
         ensure_ascii=False,
         allow_nan=False,
         indent=2,

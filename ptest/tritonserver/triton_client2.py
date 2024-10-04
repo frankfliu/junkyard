@@ -37,6 +37,7 @@ def np_to_triton_dtype(np_dtype):
         return "BYTES"
     return None
 
+
 def triton_to_npdtype(dtype):
     if dtype == "BOOL":
         return bool
@@ -66,6 +67,7 @@ def triton_to_npdtype(dtype):
         return np.bytes_
     return None
 
+
 def prepare_tensor(client, name, data):
     t = client.InferInput(name, data.shape, np_to_triton_dtype(data.dtype))
     t.set_data_from_numpy(data)
@@ -76,33 +78,24 @@ def main():
     kwargs = {"verbose": False}
     url = "localhost:8000"
     model_name = "fastertransformer"
-    inputs = [
-        {
-            "name": "input_ids",
-            "data": [[13959, 1566, 12, 2968, 10, 37, 629, 19, 1627, 5, 1]],
-            "dtype": np.uint32
-        },
-        {
-            "name": "sequence_length",
-            "data": [[11]],
-            "dtype": np.uint32
-        },
-        {
-            "name": "max_output_len",
-            "data": [[127]],
-            "dtype": np.uint32
-        }
-    ]
+    inputs = [{
+        "name": "input_ids",
+        "data": [[13959, 1566, 12, 2968, 10, 37, 629, 19, 1627, 5, 1]],
+        "dtype": np.uint32
+    }, {
+        "name": "sequence_length",
+        "data": [[11]],
+        "dtype": np.uint32
+    }, {
+        "name": "max_output_len",
+        "data": [[127]],
+        "dtype": np.uint32
+    }]
     if os.path.exists("request.json"):
         with open("request.json") as f:
             inputs = json.load(f)
 
-    json_data = {
-        "inputs": [],
-        "parameters": {
-            "binary_data_output": True
-        }
-    }
+    json_data = {"inputs": [], "parameters": {"binary_data_output": True}}
 
     binary_data = b''
     for value in inputs:
@@ -122,10 +115,9 @@ def main():
     with open("header.json", "w") as f:
         f.write(json_request)
 
-    headers = {
-        "Inference-Header-Content-Length": str(len(json_request))
-    }
-    request_body = struct.pack(f"{len(json_request)}s{len(binary_data)}s", json_request.encode(), binary_data)
+    headers = {"Inference-Header-Content-Length": str(len(json_request))}
+    request_body = struct.pack(f"{len(json_request)}s{len(binary_data)}s",
+                               json_request.encode(), binary_data)
     with open("payload.bin", "wb") as f:
         f.write(request_body)
 
@@ -138,14 +130,15 @@ def main():
     json_size = int(result.headers["Inference-Header-Content-Length"])
     json_response = json.loads(result.content[:json_size].decode())
 
-
     offset = json_size
     for out in json_response["outputs"]:
         size = out["parameters"]["binary_data_size"]
-        array = np.frombuffer(result.content[offset:offset + size], dtype=triton_to_npdtype(out["datatype"]))
+        array = np.frombuffer(result.content[offset:offset + size],
+                              dtype=triton_to_npdtype(out["datatype"]))
         array = array.reshape(out["shape"])
         offset += size
         print(f"{out['name']} ({array.dtype} {array.shape}):\n{array}")
+
 
 if __name__ == "__main__":
     main()
