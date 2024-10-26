@@ -206,11 +206,12 @@ public final class AwsCurl {
             }
             for (int i = 0; i < clients; ++i) {
                 final int clientId = i;
+                final int clientDelay = config.getDelay();
+                logger.debug("Client {} delay: {}", clientId, clientDelay);
                 tasks.add(
                         () -> {
-                            int delay = config.getDelay();
-                            if (delay > 0) {
-                                Thread.sleep(delay);
+                            if (clientDelay > 0) {
+                                Thread.sleep(clientDelay);
                             }
                             OutputStream os = config.getOutput(clientId);
                             long[] requestTime = {0L, -1L};
@@ -433,6 +434,7 @@ public final class AwsCurl {
         private JsonObject extraParameters;
         private String jq;
         private int delay;
+        private int delayMin;
         private int duration;
         private boolean random;
         private String error;
@@ -523,10 +525,11 @@ public final class AwsCurl {
                         delay = Integer.parseInt(d);
                     } else {
                         random = true;
+                        delayMin = Integer.parseInt(min);
                         if (max != null) {
-                            delay = Integer.parseInt(max) - Integer.parseInt(min);
+                            delay = Integer.parseInt(max) - delayMin;
                         } else {
-                            delay = Integer.parseInt(min);
+                            delay = delayMin;
                         }
                     }
                     if (delay < 0) {
@@ -1004,7 +1007,7 @@ public final class AwsCurl {
 
         public int getDelay() {
             if (random) {
-                RandomUtils.nextInt(delay);
+                return delayMin + RandomUtils.nextInt(delay);
             }
             return delay;
         }
