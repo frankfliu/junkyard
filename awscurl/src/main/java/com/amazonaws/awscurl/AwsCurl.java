@@ -314,6 +314,17 @@ public final class AwsCurl {
             ret.setErrorRate(100d * errorReq / totalRequests);
             ret.setConcurrentClients(clients);
 
+            long firstTokenSum = 0L;
+            if (!firstTokens.isEmpty()) {
+                Collections.sort(firstTokens);
+                firstTokenSum = firstTokens.stream().mapToLong(val -> val).sum();
+                int size = firstTokens.size();
+                ret.setTimeToFirstByte(firstTokenSum / 1000000d / size);
+                ret.setP50TimeToFirstByte(firstTokens.get(size / 2) / 1000000d);
+                ret.setP90TimeToFirstByte(firstTokens.get(size * 9 / 10) / 1000000d);
+                ret.setP99TimeToFirstByte(firstTokens.get(size * 99 / 100) / 1000000d);
+            }
+
             if (successReq > 0) {
                 ret.setTps(successReq * 1000000000d / totalTime * clients);
                 ret.setAverageLatency(totalTime / 1000000d / successReq);
@@ -325,17 +336,12 @@ public final class AwsCurl {
                     ret.setTotalTokens(totalTokens);
                     ret.setTokenPerRequest(totalTokens / totalRequests);
                     ret.setTokenThroughput(totalTokens * 1000000000d / totalTime * clients);
-                    ret.setAverageTokenLatency(totalTime / 1000000d * clients / totalTokens);
+                    int interTokenCount = totalTokens - successReq;
+                    if (interTokenCount > 0) {
+                        long interTokenTime = totalTime - firstTokenSum;
+                        ret.setAverageTokenLatency(interTokenTime / 1000000d / interTokenCount);
+                    }
                 }
-            }
-            if (!firstTokens.isEmpty()) {
-                Collections.sort(firstTokens);
-                long sum = firstTokens.stream().mapToLong(val -> val).sum();
-                int size = firstTokens.size();
-                ret.setTimeToFirstByte(sum / 1000000d / size);
-                ret.setP50TimeToFirstByte(firstTokens.get(size / 2) / 1000000d);
-                ret.setP90TimeToFirstByte(firstTokens.get(size * 9 / 10) / 1000000d);
-                ret.setP99TimeToFirstByte(firstTokens.get(size * 99 / 100) / 1000000d);
             }
             AwsCurl.logger.debug("Total request time: {} ms", totalTime / 1000000d);
             ret.print(config.isJsonOutput(), config.getJsonOutputPath());
