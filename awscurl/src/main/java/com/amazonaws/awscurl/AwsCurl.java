@@ -143,7 +143,10 @@ public final class AwsCurl {
                     ret.setHasError();
                     return ret;
                 }
-                String path = rawUri.getPath().replace(":", "%3A");
+                String path = rawUri.getPath();
+                if (config.getServiceName() != null) {
+                    path = path.replace(":", "%3A");
+                }
                 String queryString = rawUri.getRawQuery();
                 url = scheme + "://" + rawUri.getRawAuthority() + path;
                 if (queryString != null) {
