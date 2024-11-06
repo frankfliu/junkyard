@@ -335,12 +335,16 @@ final class HttpClient {
                 return HttpClients.custom()
                         .setDefaultRequestConfig(config)
                         .setSSLSocketFactory(factory)
+                        .disableAutomaticRetries()
                         .build();
             } catch (GeneralSecurityException e) {
                 throw new AssertionError(e);
             }
         }
-        return HttpClients.custom().setDefaultRequestConfig(config).build();
+        return HttpClients.custom()
+                .setDefaultRequestConfig(config)
+                .disableAutomaticRetries()
+                .build();
     }
 
     private static HttpUriRequest createHttpRequest(String method, URI uri, byte[] data) {
