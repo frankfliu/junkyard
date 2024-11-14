@@ -10,6 +10,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.HttpVersion;
 import org.apache.http.StatusLine;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
 import org.apache.http.client.methods.HttpGet;
@@ -56,12 +57,14 @@ final class HttpClient {
     private static final String DEFAULT_CONTENT_TYPE =
             Utils.getEnvOrSystemProperty("DEFAULT_CONTENT_TYPE");
 
-    private HttpClient() {}
+    private CloseableHttpClient client;
 
-    public static HttpResponse sendRequest(
+    private HttpClient(CloseableHttpClient client) {
+        this.client = client;
+    }
+
+    public HttpResponse sendRequest(
             SignableRequest request,
-            boolean insecure,
-            int timeout,
             OutputStream ps,
             boolean dumpHeader,
             AtomicInteger tokens,
@@ -74,23 +77,21 @@ final class HttpClient {
         ps.write(request.getContent());
         ps.write(("\noutput: ").getBytes(StandardCharsets.UTF_8));
         long begin = System.nanoTime();
-        try (CloseableHttpClient client = getHttpClient(insecure, timeout)) {
-            HttpUriRequest req =
-                    createHttpRequest(
-                            request.getHttpMethod(), request.getUri(), request.getContent());
-            if (dumpHeader) {
-                String path = request.getUri().getPath();
-                if (!path.startsWith("/") && !path.isEmpty()) {
-                    path = path.substring(1);
-                }
-                System.out.println("> " + request.getHttpMethod() + " /" + path + " HTTP/1.1");
-                System.out.println("> ");
+        HttpUriRequest req =
+                createHttpRequest(request.getHttpMethod(), request.getUri(), request.getContent());
+        if (dumpHeader) {
+            String path = request.getUri().getPath();
+            if (!path.startsWith("/") && !path.isEmpty()) {
+                path = path.substring(1);
             }
+            System.out.println("> " + request.getHttpMethod() + " /" + path + " HTTP/1.1");
+            System.out.println("> ");
+        }
 
-            addHeaders(req, request.getHeaders(), dumpHeader);
-            addHeaders(req, request.getSignedHeaders(), dumpHeader);
+        addHeaders(req, request.getHeaders(), dumpHeader);
+        addHeaders(req, request.getSignedHeaders(), dumpHeader);
 
-            HttpResponse resp = client.execute(req);
+        try (CloseableHttpResponse resp = client.execute(req)) {
             int code = resp.getStatusLine().getStatusCode();
             if (dumpHeader) {
                 System.out.println("> ");
@@ -189,6 +190,10 @@ final class HttpClient {
             }
             return ret;
         }
+    }
+
+    public void close() throws IOException {
+        client.close();
     }
 
     private static void handleServerSentEvent(
@@ -314,7 +319,7 @@ final class HttpClient {
         return parameters;
     }
 
-    private static CloseableHttpClient getHttpClient(boolean insecure, int timeout) {
+    public static HttpClient getHttpClient(boolean insecure, int timeout, int concurrency) {
         RequestConfig config =
                 RequestConfig.custom()
                         .setConnectTimeout(timeout)
@@ -332,19 +337,25 @@ final class HttpClient {
                 SSLConnectionSocketFactory factory =
                         new SSLConnectionSocketFactory(context, verifier);
 
-                return HttpClients.custom()
-                        .setDefaultRequestConfig(config)
-                        .setSSLSocketFactory(factory)
-                        .disableAutomaticRetries()
-                        .build();
+                return new HttpClient(
+                        HttpClients.custom()
+                                .setDefaultRequestConfig(config)
+                                .setSSLSocketFactory(factory)
+                                .disableAutomaticRetries()
+                                .setMaxConnPerRoute(concurrency)
+                                .setMaxConnTotal(concurrency)
+                                .build());
             } catch (GeneralSecurityException e) {
                 throw new AssertionError(e);
             }
         }
-        return HttpClients.custom()
-                .setDefaultRequestConfig(config)
-                .disableAutomaticRetries()
-                .build();
+        return new HttpClient(
+                HttpClients.custom()
+                        .setDefaultRequestConfig(config)
+                        .disableAutomaticRetries()
+                        .setMaxConnPerRoute(concurrency)
+                        .setMaxConnTotal(concurrency)
+                        .build());
     }
 
     private static HttpUriRequest createHttpRequest(String method, URI uri, byte[] data) {

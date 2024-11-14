@@ -193,6 +193,7 @@ public final class AwsCurl {
             boolean insecure = config.isInsecure();
             boolean printHeader = config.isInclude() || config.isVerbose();
             int clients = config.getClients();
+            int timeout = config.getConnectTimeout();
             int nRequests = config.getNumberOfRequests();
 
             AtomicInteger totalReq = new AtomicInteger(clients * nRequests);
@@ -201,6 +202,7 @@ public final class AwsCurl {
             final AtomicInteger errors = new AtomicInteger();
             final AtomicInteger tokens = config.countTokens ? new AtomicInteger(0) : null;
 
+            HttpClient client = HttpClient.getHttpClient(insecure, timeout, clients * 2);
             ExecutorService executor = Executors.newFixedThreadPool(clients);
             ArrayList<Callable<Void>> tasks = new ArrayList<>(clients);
             long stopTime = config.getStopTime();
@@ -229,10 +231,8 @@ public final class AwsCurl {
                                 requestTime[0] = 0L;
                                 requestTime[1] = -1L;
                                 HttpResponse resp =
-                                        HttpClient.sendRequest(
+                                        client.sendRequest(
                                                 request,
-                                                insecure,
-                                                config.getConnectTimeout(),
                                                 os,
                                                 printHeader,
                                                 tokens,
@@ -255,10 +255,8 @@ public final class AwsCurl {
                                     req.addHeader(SM_CUSTOM_HEADER, "x-starting-token=" + token);
                                     req.sign();
                                     resp =
-                                            HttpClient.sendRequest(
+                                            client.sendRequest(
                                                     req,
-                                                    insecure,
-                                                    config.getConnectTimeout(),
                                                     os,
                                                     printHeader,
                                                     tokens,
@@ -302,6 +300,8 @@ public final class AwsCurl {
                     errors.getAndIncrement();
                 }
             }
+
+            client.close();
 
             int successReq = success.size();
             int errorReq = errors.get();
