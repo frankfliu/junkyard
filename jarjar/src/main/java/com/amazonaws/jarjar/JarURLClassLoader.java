@@ -24,6 +24,7 @@ public class JarURLClassLoader extends URLClassLoader {
         }
     }
 
+    @SuppressWarnings("this-escape")
     public JarURLClassLoader(List<String> jars) {
         super(new URL[] {}, Thread.currentThread().getContextClassLoader());
         try {
