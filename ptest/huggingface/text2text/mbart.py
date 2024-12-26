@@ -112,10 +112,6 @@ def jit_trace():
     torch.jit.save(traced_decoder, "model/mbart-large-50.pt")
 
 
-if __name__ == '__main__':
-    jit_trace()
-
-
 def main():
     model_id = "facebook/mbart-large-50-many-to-many-mmt"
     model = MBartForConditionalGeneration.from_pretrained(model_id)
