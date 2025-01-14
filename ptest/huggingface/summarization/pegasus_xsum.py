@@ -1,3 +1,4 @@
+import os
 from typing import Tuple, List
 
 import torch
@@ -112,7 +113,10 @@ def main():
                 torch.tensor([[0, 0]]), encoder_outputs[0], past_key_values
             ],
         })
-    torch.jit.save(traced_decoder, "model.pt")
+
+    model_dir = model_id.split("/")[1]
+    os.makedirs(model_dir, exist_ok=True)
+    torch.jit.save(traced_decoder, f"{model_dir}/model.pt")
 
 
 if __name__ == '__main__':

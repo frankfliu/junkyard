@@ -85,13 +85,13 @@ def trace():
     attention_mask = encoding["attention_mask"]
 
     traced_model = torch.jit.trace(model, (input_ids, attention_mask))
-    if not os.path.exists("models"):
-        os.makedirs("models")
 
-    torch.jit.save(traced_model, "models/model.pt")
+    model_dir = model_id.split("/")[1]
+    os.makedirs(model_dir, exist_ok=True)
+    torch.jit.save(traced_model, f"{model_dir}/model.pt")
 
 
 if __name__ == '__main__':
-    # main()
+    main()
     # pytorch_prediction()
-    trace()
+    # trace()

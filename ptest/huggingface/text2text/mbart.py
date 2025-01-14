@@ -109,25 +109,28 @@ def jit_trace():
                 torch.tensor([[0, 0]]), encoder_outputs[0], past_key_values
             ],
         })
-    torch.jit.save(traced_decoder, "model/mbart-large-50.pt")
+
+    model_dir = model_id.split("/")[1]
+    os.makedirs(model_dir, exist_ok=True)
+    torch.jit.save(traced_decoder, f"{model_dir}/model.pt")
 
 
 def main():
     model_id = "facebook/mbart-large-50-many-to-many-mmt"
     model = MBartForConditionalGeneration.from_pretrained(model_id)
-    # tokenizer = AutoTokenizer.from_pretrained(model_id,
-    #                                           src_lang="fr_XX",
-    #                                           tgt_lang="en_XX")
-    # tokenizer.save_pretrained("output/mbart-large")
-    tokenizer = AutoTokenizer.from_pretrained("mbart-large",
+    tokenizer = AutoTokenizer.from_pretrained(model_id,
                                               src_lang="fr_XX",
                                               tgt_lang="en_XX")
+    # tokenizer.save_pretrained("output/mbart-large")
+    # tokenizer = AutoTokenizer.from_pretrained("mbart-large",
+    #                                           src_lang="fr_XX",
+    #                                           tgt_lang="en_XX")
     input_text = "Le chef de l 'ONU affirme qu 'il n 'y a pas de solution militai"
 
     model_inputs = tokenizer(input_text, return_tensors="pt")
     generated_tokens = model.generate(
         **model_inputs,
-        num_beams=1,
+        num_beams=2,
         forced_bos_token_id=tokenizer.lang_code_to_id["en_XX"])
     output = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
