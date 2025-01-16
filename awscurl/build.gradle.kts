@@ -40,8 +40,8 @@ tasks {
         })
 
         doLast {
-            exec {
-                workingDir(".")
+            providers.exec {
+                workingDir = projectDir
                 executable("sh")
                 args(
                     "-c",

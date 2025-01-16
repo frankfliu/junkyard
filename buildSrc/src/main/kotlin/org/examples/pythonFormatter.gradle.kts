@@ -5,7 +5,8 @@ import org.gradle.kotlin.dsl.registering
 tasks {
     register("formatPython") {
         doLast {
-            project.exec {
+            providers.exec {
+                workingDir = projectDir
                 commandLine(
                     "bash",
                     "-c",
@@ -18,7 +19,8 @@ tasks {
     val verifyPython by registering {
         doFirst {
             try {
-                project.exec {
+                providers.exec {
+                    workingDir = projectDir
                     commandLine(
                         "bash",
                         "-c",

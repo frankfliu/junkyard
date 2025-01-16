@@ -3,7 +3,8 @@ package org.examples
 tasks {
     register("formatShell") {
         doLast {
-            project.exec {
+            providers.exec {
+                workingDir = projectDir
                 commandLine(
                     "bash",
                     "-c",
