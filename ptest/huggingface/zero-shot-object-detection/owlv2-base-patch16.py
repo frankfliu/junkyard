@@ -99,6 +99,8 @@ def jit_trace():
     os.makedirs(model_dir, exist_ok=True)
     torch.jit.save(traced_model, f"{model_dir}/model.pt")
 
+    pipe.tokenizer.save_pretrained(model_dir)
+
 
 if __name__ == '__main__':
     # main()
