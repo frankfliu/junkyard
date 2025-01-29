@@ -39,3 +39,9 @@ node_modules/
 
 #vscode
 .vscode
+
+merges.txt
+special_tokens_map.json
+tokenizer.json
+tokenizer_config.json
+vocab.json

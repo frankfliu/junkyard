@@ -1,11 +1,11 @@
 package org.examples
 
-import org.gradle.kotlin.dsl.registering
+open class Cmd @Inject constructor(@Internal val execOperations: ExecOperations) : DefaultTask()
 
 tasks {
-    register("formatPython") {
+    register<Cmd>("formatPython") {
         doLast {
-            providers.exec {
+            execOperations.exec {
                 workingDir = projectDir
                 commandLine(
                     "bash",
@@ -16,10 +16,10 @@ tasks {
         }
     }
 
-    val verifyPython by registering {
+    register<Cmd>("verifyPython") {
         doFirst {
             try {
-                providers.exec {
+                execOperations.exec {
                     workingDir = projectDir
                     commandLine(
                         "bash",

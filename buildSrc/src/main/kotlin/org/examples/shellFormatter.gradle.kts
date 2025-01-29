@@ -1,9 +1,11 @@
 package org.examples
 
+open class Cmd @Inject constructor(@Internal val execOperations: ExecOperations) : DefaultTask()
+
 tasks {
-    register("formatShell") {
+    register<Cmd>("formatShell") {
         doLast {
-            providers.exec {
+            execOperations.exec {
                 workingDir = projectDir
                 commandLine(
                     "bash",
