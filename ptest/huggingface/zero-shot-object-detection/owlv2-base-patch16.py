@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 import os
 from typing import Any
 from collections import OrderedDict
@@ -40,7 +41,6 @@ def main():
 
     image_url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     image = Image.open(requests.get(image_url, stream=True).raw)
-    # texts = ["a cat", "a remote control"]
     texts = ["a cat"]
 
     result = pipe(image=image, candidate_labels=texts, return_tensors="pt")
@@ -95,11 +95,43 @@ def jit_trace():
                                    (input_ids, attention_mask, pixel_values),
                                    strict=False)
 
-    model_dir = model_id.split("/")[1]
-    os.makedirs(model_dir, exist_ok=True)
-    torch.jit.save(traced_model, f"{model_dir}/model.pt")
+    model_name = model_id.split("/")[1]
+    os.makedirs(model_name, exist_ok=True)
 
-    pipe.tokenizer.save_pretrained(model_dir)
+    pipe.tokenizer.save_pretrained(model_name)
+    for path in os.listdir(model_name):
+        if path != "tokenizer.json" and path != "tokenizer_config.json":
+            os.remove(os.path.join(model_name, path))
+
+    torch.jit.save(traced_model, f"{model_name}/{model_name}.pt")
+
+    serving_file = os.path.join(model_name, "serving.properties")
+    arguments = {
+        "engine":
+        "PyTorch",
+        "option.modelName":
+        model_name,
+        "option.mapLocation":
+        "true",
+        "width":
+        "960",
+        "height":
+        "960",
+        "pad":
+        "128",
+        "resize":
+        "true",
+        "toTensor":
+        "true",
+        "normalize":
+        "0.48145466,0.4578275,0.40821073,0.26862954,0.26130258,0.27577711",
+        "translatorFactory":
+        "ai.djl.huggingface.translator.ZeroShotObjectDetectionTranslatorFactory",
+    }
+
+    with open(serving_file, 'w') as f:
+        for k, v in arguments.items():
+            f.write(f"{k}={v}\n")
 
 
 if __name__ == '__main__':

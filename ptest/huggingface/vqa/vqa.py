@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 import os
 from collections import OrderedDict
 from typing import Any
@@ -42,8 +43,8 @@ class ModelWrapper(nn.Module):
 def main(model_id: str):
     pipe = pipeline("visual-question-answering", model=model_id, device="cpu")
 
-    question = "how many dogs are in the picture?"
-    img_url = 'https://storage.googleapis.com/sfr-vision-language-research/BLIP/demo.jpg'
+    question = "How many cats are there?"
+    img_url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     image = Image.open(requests.get(img_url, stream=True).raw).convert('RGB')
 
     encoding = pipe.tokenizer([question], padding=True, return_tensors='pt')
@@ -67,6 +68,7 @@ def main(model_id: str):
     os.makedirs(model_dir, exist_ok=True)
     torch.jit.save(traced_model, f"{model_dir}/model.pt")
 
+    pipe.model.config.save_pretrained(model_dir)
     pipe.tokenizer.save_pretrained(model_dir)
 
 
@@ -74,3 +76,4 @@ if __name__ == '__main__':
     # model_id = "Salesforce/blip-vqa-base"
     # model_id = "google/deplot"
     main("dandelin/vilt-b32-finetuned-vqa")
+    print("finished")

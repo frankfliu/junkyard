@@ -35,7 +35,7 @@ class ModelWrapper(nn.Module):
 
 def main():
     model_id = "openai/clip-vit-large-patch14"
-    pipe = pipeline(model=model_id, framework="pt")
+    pipe = pipeline(model=model_id, framework="pt", device="cpu")
 
     image_url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     image = Image.open(requests.get(image_url, stream=True).raw)
@@ -75,7 +75,7 @@ def main():
 
 def jit_trace():
     model_id = "openai/clip-vit-large-patch14"
-    pipe = pipeline(model=model_id, framework="pt")
+    pipe = pipeline(model=model_id, framework="pt", device="cpu")
 
     image_url = "http://images.cocodataset.org/val2017/000000039769.jpg"
     image = Image.open(requests.get(image_url, stream=True).raw)
@@ -94,13 +94,44 @@ def jit_trace():
                                    (input_ids, attention_mask, pixel_values),
                                    strict=False)
 
-    model_dir = model_id.split("/")[1]
-    os.makedirs(model_dir, exist_ok=True)
-    torch.jit.save(traced_model, f"{model_dir}/model.pt")
+    model_name = model_id.split("/")[1]
+    os.makedirs(model_name, exist_ok=True)
 
-    pipe.tokenizer.save_pretrained(model_dir)
+    pipe.tokenizer.save_pretrained(model_name)
+    for path in os.listdir(model_name):
+        if path != "tokenizer.json" and path != "tokenizer_config.json":
+            os.remove(os.path.join(model_name, path))
+
+    torch.jit.save(traced_model, f"{model_name}/{model_name}.pt")
+    serving_file = os.path.join(model_name, "serving.properties")
+    arguments = {
+        "engine":
+        "PyTorch",
+        "option.modelName":
+        model_name,
+        "option.mapLocation":
+        "true",
+        "width":
+        "224",
+        "height":
+        "224",
+        "resizeShort":
+        "true",
+        "toTensor":
+        "true",
+        "centerCrop":
+        "true",
+        "normalize":
+        "0.48145466,0.4578275,0.40821073,0.26862954,0.26130258,0.27577711",
+        "translatorFactory":
+        "ai.djl.huggingface.translator.ZeroShotImageClassificationTranslatorFactory",
+    }
+
+    with open(serving_file, 'w') as f:
+        for k, v in arguments.items():
+            f.write(f"{k}={v}\n")
 
 
 if __name__ == '__main__':
-    main()
-    # jit_trace()
+    # main()
+    jit_trace()
