@@ -26,6 +26,7 @@ __pycache__/
 *.gguf
 *.xgb
 *.bin
+*.wav
 
 # Eclipse
 .settings

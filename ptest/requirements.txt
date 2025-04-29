@@ -1,0 +1,7 @@
+requests
+pydantic
+numpy
+torch
+transformers
+huggingface_hub
+PIL
