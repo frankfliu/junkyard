@@ -9,9 +9,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.itextpdf:layout:9.1.0") {
-        exclude("com.itextpdf","bouncy-castle-connector")
-    }
+    implementation("org.apache.pdfbox:pdfbox:3.0.5")
     implementation(libs.slf4j.simple)
 
     testImplementation(libs.testng) {
