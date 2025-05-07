@@ -6,6 +6,7 @@ import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.AreaBreak;
 import com.itextpdf.layout.element.Image;
+import com.itextpdf.layout.element.Paragraph;
 
 import java.io.IOException;
 
@@ -16,7 +17,7 @@ public class ItextExample {
         try (Document document = new Document(new PdfDocument(new PdfWriter(output)))) {
             String file = "https://resources.djl.ai/images/kitten.jpg";
             Image image = new Image(ImageDataFactory.create(file));
-            document.add(image);
+            document.add(new Paragraph("Hello!"));
             document.add(new AreaBreak());
             document.add(image);
         }

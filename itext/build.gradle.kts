@@ -9,7 +9,10 @@ repositories {
 }
 
 dependencies {
-    implementation("com.itextpdf:itext-core:9.1.0")
+    implementation("com.itextpdf:layout:9.1.0") {
+        exclude("com.itextpdf","bouncy-castle-connector")
+    }
+    implementation(libs.slf4j.simple)
 
     testImplementation(libs.testng) {
         exclude(group = "junit", module = "junit")

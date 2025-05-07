@@ -1,5 +1,6 @@
 package org.examples
 
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.kotlin.dsl.attributes
 import org.gradle.kotlin.dsl.`java-library`
 import org.gradle.kotlin.dsl.systemProperties
@@ -43,6 +44,7 @@ tasks {
         testLogging {
             showStandardStreams = true
             events("passed", "skipped", "failed", "standardOut", "standardError")
+            exceptionFormat = TestExceptionFormat.FULL
         }
 
         environment("MODEL_SERVER_HOME", "${project.projectDir}")
@@ -58,18 +60,8 @@ tasks {
             "org.slf4j.simpleLogger.defaultLogLevel" to "debug",
             "org.slf4j.simpleLogger.log.org.mortbay.log" to "warn",
             "org.slf4j.simpleLogger.log.org.testng" to "info",
-            "disableProgressBar" to "true",
-            "nightly" to System.getProperty("nightly", "false")
         )
         if (gradle.startParameter.isOffline)
             systemProperty("ai.djl.offline", "true")
-    }
-    jar {
-        manifest {
-            attributes(
-                "Automatic-Module-Name" to "ai.djl.${project.name.replace('-', '_')}",
-                "Specification-Version" to "${project.version}"
-            )
-        }
     }
 }
