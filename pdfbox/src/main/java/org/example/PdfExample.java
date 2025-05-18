@@ -17,7 +17,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-public class PdfExample {
+public final class PdfExample {
+
+    private PdfExample() {}
 
     public static void main(String[] args) throws IOException {
         String output = "build/hello.pdf";
