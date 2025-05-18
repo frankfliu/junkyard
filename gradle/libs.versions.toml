@@ -8,7 +8,6 @@ commonsCodec = "1.18.0"
 commonsIo = "2.19.0"
 netty = "4.1.121.Final"
 slf4j = "2.0.17"
-httpcomponents = "4.5.14"
 jsonpath = "2.9.0"
 
 testng = "7.11.0"
@@ -19,8 +18,6 @@ slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 commons-io = { module = "commons-io:commons-io", version.ref = "commonsIo" }
 commons-cli = { module = "commons-cli:commons-cli", version.ref = "commonsCli" }
 commons-codec = { module = "commons-codec:commons-codec", version.ref = "commonsCodec" }
-apache-httpclient = { module = "org.apache.httpcomponents:httpclient", version.ref = "httpcomponents" }
-apache-httpmime = { module = "org.apache.httpcomponents:httpmime", version.ref = "httpcomponents" }
 netty-http = { module = "io.netty:netty-codec-http", version.ref = "netty" }
 
 testng = { module = "org.testng:testng", version.ref = "testng" }

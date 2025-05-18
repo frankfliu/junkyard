@@ -14,11 +14,6 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.slf4j.ILoggerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +31,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,6 +42,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -190,7 +188,6 @@ public final class AwsCurl {
                 signer = null;
             }
 
-            boolean insecure = config.isInsecure();
             boolean printHeader = config.isInclude() || config.isVerbose();
             int clients = config.getClients();
             int timeout = config.getConnectTimeout();
@@ -202,7 +199,7 @@ public final class AwsCurl {
             final AtomicInteger errors = new AtomicInteger();
             final AtomicInteger tokens = config.countTokens ? new AtomicInteger(0) : null;
 
-            HttpClient client = HttpClient.getHttpClient(insecure, timeout, clients * 2);
+            Client client = Client.getHttpClient(timeout);
             ExecutorService executor = Executors.newFixedThreadPool(clients);
             ArrayList<Callable<Void>> tasks = new ArrayList<>(clients);
             long stopTime = config.getStopTime();
@@ -230,7 +227,7 @@ public final class AwsCurl {
                                 request.sign();
                                 requestTime[0] = 0L;
                                 requestTime[1] = -1L;
-                                HttpResponse resp =
+                                HttpResponse<InputStream> resp =
                                         client.sendRequest(
                                                 request,
                                                 os,
@@ -238,7 +235,7 @@ public final class AwsCurl {
                                                 tokens,
                                                 requestTime,
                                                 config.getJsonExpression());
-                                int code = resp.getStatusLine().getStatusCode();
+                                int code = resp.statusCode();
                                 if (code >= 300) {
                                     errors.getAndIncrement();
                                     continue;
@@ -246,8 +243,9 @@ public final class AwsCurl {
                                 if (requestTime[1] > 0) {
                                     firstTokens.add(requestTime[1]);
                                 }
-
-                                String token = getNextToken(resp.getFirstHeader(SM_CUSTOM_HEADER));
+                                Optional<String> value =
+                                        resp.headers().firstValue(SM_CUSTOM_HEADER);
+                                String token = getNextToken(value.orElse(null));
                                 int iteration = 0;
                                 while (token != null) {
                                     Thread.sleep(200);
@@ -262,12 +260,13 @@ public final class AwsCurl {
                                                     tokens,
                                                     requestTime,
                                                     config.getJsonExpression());
-                                    code = resp.getStatusLine().getStatusCode();
+                                    code = resp.statusCode();
                                     if (code >= 300) {
                                         break;
                                     }
 
-                                    token = getNextToken(resp.getFirstHeader(SM_CUSTOM_HEADER));
+                                    value = resp.headers().firstValue(SM_CUSTOM_HEADER);
+                                    token = getNextToken(value.orElse(null));
                                     if (++iteration > 200) {
                                         System.out.println("exceed 200 pagination requests.");
                                         code = 500;
@@ -300,8 +299,6 @@ public final class AwsCurl {
                     errors.getAndIncrement();
                 }
             }
-
-            client.close();
 
             int successReq = success.size();
             int errorReq = errors.get();
@@ -403,11 +400,11 @@ public final class AwsCurl {
         return Utils.getEnvOrSystemProperty("AWS_REGION");
     }
 
-    static String getNextToken(Header header) {
+    static String getNextToken(String header) {
         if (header == null) {
             return null;
         }
-        String[] pair = header.getValue().split("=", 2);
+        String[] pair = header.split("=", 2);
         if (pair.length == 2 && "x-next-token".equalsIgnoreCase(pair[0])) {
             return pair[1];
         }
@@ -430,7 +427,6 @@ public final class AwsCurl {
         private boolean forceGet;
         private String[] headers;
         private boolean include;
-        private boolean insecure;
         private boolean jsonOutput;
         private String jsonOutputPath;
         private String output;
@@ -487,7 +483,6 @@ public final class AwsCurl {
             }
             forceGet = cmd.hasOption("get");
             include = cmd.hasOption("include");
-            insecure = cmd.hasOption("insecure");
             jsonOutput = cmd.hasOption("json-output");
             jsonOutputPath = cmd.getOptionValue("json-path");
             if (jsonOutputPath != null) {
@@ -726,11 +721,6 @@ public final class AwsCurl {
                             .desc("Include protocol headers in the output")
                             .build());
             options.addOption(
-                    Option.builder("k")
-                            .longOpt("insecure")
-                            .desc("Allow connections to SSL sites without certs")
-                            .build());
-            options.addOption(
                     Option.builder("o")
                             .longOpt("output")
                             .hasArg()
@@ -846,10 +836,6 @@ public final class AwsCurl {
             return include;
         }
 
-        public boolean isInsecure() {
-            return insecure;
-        }
-
         public boolean isJsonOutput() {
             return jsonOutput;
         }
@@ -958,20 +944,19 @@ public final class AwsCurl {
 
             if (form != null || formString != null) {
                 requestMethod = requestMethod == null ? "POST" : requestMethod;
-                MultipartEntityBuilder mb = MultipartEntityBuilder.create();
+                Multipart mb = new Multipart();
                 addFormPart(mb, form, true);
                 addFormPart(mb, formString, false);
-                HttpEntity entity = mb.build();
-                contentType = entity.getContentType().getValue();
+                contentType = mb.getContentType();
 
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                entity.writeTo(bos);
+                mb.writeTo(bos);
                 return bos.toByteArray();
             }
 
             if (data != null || dataRaw != null || dataUrlencode != null) {
                 requestMethod = requestMethod == null ? "POST" : requestMethod;
-                contentType = ContentType.APPLICATION_FORM_URLENCODED.toString();
+                contentType = "application/x-www-form-urlencoded";
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 addUrlEncodedData(bos, data, 1);
                 addUrlEncodedData(bos, dataRaw, 2);
@@ -984,7 +969,7 @@ public final class AwsCurl {
                 requestMethod = requestMethod == null ? "PUT" : requestMethod;
                 setContentType();
                 if (contentType == null) {
-                    contentType = getMimeType(uploadFile).toString();
+                    contentType = getMimeType(uploadFile);
                 }
                 return readFile(uploadFile);
             }
@@ -1097,7 +1082,8 @@ public final class AwsCurl {
                     .getBytes(StandardCharsets.UTF_8);
         }
 
-        private void addFormPart(MultipartEntityBuilder mb, String[] forms, boolean allowFile) {
+        private void addFormPart(Multipart mb, String[] forms, boolean allowFile)
+                throws IOException {
             if (forms == null) {
                 return;
             }
@@ -1129,60 +1115,50 @@ public final class AwsCurl {
                 }
 
                 if (allowFile && value.startsWith("@")) {
-                    File file = new File(value.substring(1));
+                    Path file = Paths.get(value.substring(1));
                     if (StringUtils.isEmpty(fileName)) {
-                        fileName = file.getName();
+                        fileName = Objects.requireNonNull(file.getFileName()).toString();
                     }
-                    ContentType ct;
-                    if (StringUtils.isEmpty(type)) {
-                        ct = getMimeType(fileName);
-                    } else {
-                        ct = ContentType.create(type);
-                    }
-                    mb.addBinaryBody(key, file, ct, fileName);
+                    String ct = StringUtils.isEmpty(type) ? getMimeType(fileName) : type;
+                    mb.addBodyPart(key, file, ct, fileName);
                 } else {
-                    ContentType ct;
-                    if (StringUtils.isEmpty(type)) {
-                        ct = ContentType.TEXT_PLAIN;
-                    } else {
-                        ct = ContentType.create(type);
-                    }
-                    mb.addTextBody(key, value, ct);
+                    String ct = StringUtils.isEmpty(type) ? "text/plain" : type;
+                    mb.addBodyPart(key, value.getBytes(StandardCharsets.UTF_8), ct);
                 }
             }
         }
 
-        private ContentType getMimeType(String fileName) {
+        private String getMimeType(String fileName) {
             String ext = FilenameUtils.getFileType(fileName).toLowerCase(Locale.ROOT);
             switch (ext.toLowerCase(Locale.ENGLISH)) {
                 case "txt":
                 case "text":
-                    return ContentType.TEXT_PLAIN;
+                    return "text/plain";
                 case "html":
-                    return ContentType.TEXT_HTML;
+                    return "text/html";
                 case "xhtml":
-                    return ContentType.APPLICATION_XHTML_XML;
+                    return "application/xhtml+xml";
                 case "xml":
-                    return ContentType.APPLICATION_XML;
+                    return "application/xml";
                 case "json":
-                    return ContentType.APPLICATION_JSON;
+                    return "application/json";
                 case "jpg":
                 case "jpeg":
-                    return ContentType.IMAGE_JPEG;
+                    return "image/jpeg";
                 case "png":
-                    return ContentType.IMAGE_PNG;
+                    return "image/png";
                 case "gif":
-                    return ContentType.IMAGE_GIF;
+                    return "image/gif";
                 case "bmp":
-                    return ContentType.IMAGE_BMP;
+                    return "image/bmp";
                 case "svg":
-                    return ContentType.IMAGE_SVG;
+                    return "image/svg+xml";
                 case "tiff":
-                    return ContentType.IMAGE_TIFF;
+                    return "image/tiff";
                 case "webp":
-                    return ContentType.IMAGE_WEBP;
+                    return "image/webp";
                 default:
-                    return ContentType.APPLICATION_OCTET_STREAM;
+                    return "application/octet-stream";
             }
         }
     }

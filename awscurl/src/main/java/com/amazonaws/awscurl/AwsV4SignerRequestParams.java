@@ -6,7 +6,7 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
 
-/** The AWSv4 signning request parameters. */
+/** The AWSv4 signing request parameters. */
 public class AwsV4SignerRequestParams {
 
     private SignableRequest request;

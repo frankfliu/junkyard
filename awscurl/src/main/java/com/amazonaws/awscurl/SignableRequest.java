@@ -8,7 +8,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -101,6 +100,10 @@ public class SignableRequest {
 
     private void setUri(URI uri) {
         this.uri = uri;
+        path = uri.getPath().replace(":", "%253A");
+        parameters = Client.parseQueryString(uri.getQuery());
+        // TODO: workaround HttpClient restriction
+        /*
         String schema = uri.getScheme().toLowerCase(Locale.ENGLISH);
         int port = uri.getPort();
         String host = null;
@@ -120,9 +123,8 @@ public class SignableRequest {
         if (host == null) {
             host = uri.getHost();
         }
-        path = uri.getPath().replace(":", "%253A");
-        parameters = HttpClient.parseQueryString(uri.getQuery());
         headers.put("Host", host);
+        */
     }
 
     /**
