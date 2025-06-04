@@ -1,0 +1,72 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools", "setuptools_scm[toml]"]
+
+[project]
+authors = [{"name" = "Frank Liu"}]
+description = "Python testing code collection"
+dynamic = ["version"]
+license = "Apache-2.0"
+name = "ptest"
+readme = {file = "README.md", content-type = "text/markdown"}
+dependencies = [
+  "fastapi",
+  "pydantic~=2.0",
+  "pydantic-settings",
+  "typer"
+]
+
+[project.optional-dependencies]
+dev = [
+  "build",
+  "dapperdata",
+  "glom",
+  "mypy",
+  "pytest",
+  "pytest-asyncio",
+  "pytest-cov",
+  "pytest-pretty",
+  "ruamel.yaml",
+  "ruff",
+  "toml-sort",
+  "uv"
+]
+
+[project.scripts]
+ptest = "ptest.cli:app"
+
+[tool.coverage.run]
+omit = [
+  "./ptest/_version.py",
+  "./ptest/__init__.py",
+  "./tests/*"
+]
+
+[tool.dapperdata]
+exclude_paths = ["dist", ".mypy_cache", ".pytest_cache", ".ruff_cache"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+exclude = ["./ptest/_version.py"]
+line-length = 120
+
+[tool.setuptools.dynamic]
+readme = {file = ["README.md"]}
+
+[tool.setuptools.exclude-package-data]
+"*" = [".gitignore"]
+
+[tool.setuptools.package-data]
+ptest = ["py.typed"]
+
+[tool.setuptools.packages.find]
+exclude = ["tests*"]
+
+[tool.setuptools_scm]
+fallback_version = "0.0.0-dev"
+write_to = "ptest/_version.py"
