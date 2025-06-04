@@ -8,7 +8,7 @@ import tritonclient.http as httpclient
 
 
 def np_to_triton_dtype(np_dtype):
-    if np_dtype == bool:
+    if np_dtype is bool:
         return "BOOL"
     elif np_dtype == np.int8:
         return "INT8"

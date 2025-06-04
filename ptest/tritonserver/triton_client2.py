@@ -9,7 +9,7 @@ import requests
 
 
 def np_to_triton_dtype(np_dtype):
-    if np_dtype == bool:
+    if np_dtype is bool:
         return "BOOL"
     elif np_dtype == np.int8:
         return "INT8"
@@ -75,8 +75,8 @@ def prepare_tensor(client, name, data):
 
 
 def main():
-    kwargs = {"verbose": False}
-    url = "localhost:8000"
+    _kwargs = {"verbose": False}
+    _url = "localhost:8000"
     model_name = "fastertransformer"
     inputs = [{
         "name": "input_ids",

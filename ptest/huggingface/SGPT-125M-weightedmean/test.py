@@ -23,7 +23,7 @@ def main():
                                   return_dict=True).last_hidden_state
 
     # Get weights of shape [bs, seq_len, hid_dim]
-    end = last_hidden_state.shape[1] + 1
+    _end = last_hidden_state.shape[1] + 1
     r = torch.arange(start=1, end=last_hidden_state.shape[1] + 1)
     r = r.unsqueeze(0)
     r = r.unsqueeze(-1)
@@ -40,7 +40,7 @@ def main():
                                dim=1)
     sum_mask = torch.sum(input_mask_expanded * weights, dim=1)
 
-    embeddings = sum_embeddings / sum_mask
+    _embeddings = sum_embeddings / sum_mask
 
 
 if __name__ == '__main__':

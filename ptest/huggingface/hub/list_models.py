@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sys
+from collections import defaultdict
 
 import requests
 from huggingface_hub import HfApi

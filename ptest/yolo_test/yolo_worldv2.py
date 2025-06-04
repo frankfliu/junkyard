@@ -43,7 +43,7 @@ class VisionModelWrapper(nn.Module):
         x: torch.Tensor,
     ) -> torch.Tensor:
         ori_txt_feats = txt_feats.clone()
-        y, dt, embeddings = [], [], []  # outputs
+        y, _dt, _embeddings = [], [], []  # outputs
         for m in self.vision_model:  # except the head part
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(
