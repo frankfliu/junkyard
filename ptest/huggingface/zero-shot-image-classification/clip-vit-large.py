@@ -11,7 +11,6 @@ from transformers import pipeline
 
 
 class ModelWrapper(nn.Module):
-
     def __init__(self, model) -> None:
         super().__init__()
         self.model = model
@@ -22,9 +21,7 @@ class ModelWrapper(nn.Module):
         attention_mask: torch.Tensor,
         pixel_values: torch.Tensor,
     ) -> dict[Any, torch.Tensor]:
-        output = self.model(input_ids=input_ids,
-                            attention_mask=attention_mask,
-                            pixel_values=pixel_values)
+        output = self.model(input_ids=input_ids, attention_mask=attention_mask, pixel_values=pixel_values)
         # filter non-Tensor
         ret = OrderedDict()
         for k, v in output.items():
@@ -41,35 +38,30 @@ def main():
     image = Image.open(requests.get(image_url, stream=True).raw)
     texts = ["cat", "remote control"]
 
-    result = pipe(image,
-                  candidate_labels=texts,
-                  return_tensors="pt",
-                  multi_label=False)
+    result = pipe(image, candidate_labels=texts, return_tensors="pt", multi_label=False)
     print(result)
 
     hypothesis_template = "This is a photo of {}."
     sequences = [hypothesis_template.format(x) for x in texts]
 
-    encoding = pipe.tokenizer(sequences, padding=True, return_tensors='pt')
+    encoding = pipe.tokenizer(sequences, padding=True, return_tensors="pt")
     input_ids = encoding["input_ids"]
     attention_mask = encoding["attention_mask"]
 
-    image_features = pipe.image_processor(images=image, return_tensors='pt')
+    image_features = pipe.image_processor(images=image, return_tensors="pt")
     pixel_values = image_features["pixel_values"]
 
     with torch.no_grad():
         # outputs = model(**encoding)
-        outputs = ModelWrapper(pipe.model)(input_ids, attention_mask,
-                                           pixel_values)
+        outputs = ModelWrapper(pipe.model)(input_ids, attention_mask, pixel_values)
 
     logits = outputs["logits_per_image"][0]
     probs = logits.softmax(dim=-1).numpy()
 
-    result = [{
-        "score": score,
-        "label": candidate_label
-    } for score, candidate_label in sorted(zip(probs, texts),
-                                           key=lambda x: -x[0])]
+    result = [
+        {"score": score, "label": candidate_label}
+        for score, candidate_label in sorted(zip(probs, texts), key=lambda x: -x[0])
+    ]
     print(result)
 
 
@@ -83,16 +75,14 @@ def jit_trace():
     hypothesis_template = "This is a photo of {}."
     sequences = [hypothesis_template.format(x) for x in texts]
 
-    encoding = pipe.tokenizer(sequences, padding=True, return_tensors='pt')
+    encoding = pipe.tokenizer(sequences, padding=True, return_tensors="pt")
     input_ids = encoding["input_ids"]
     attention_mask = encoding["attention_mask"]
 
-    image_features = pipe.image_processor(images=image, return_tensors='pt')
+    image_features = pipe.image_processor(images=image, return_tensors="pt")
     pixel_values = image_features["pixel_values"]
 
-    traced_model = torch.jit.trace(ModelWrapper(pipe.model),
-                                   (input_ids, attention_mask, pixel_values),
-                                   strict=False)
+    traced_model = torch.jit.trace(ModelWrapper(pipe.model), (input_ids, attention_mask, pixel_values), strict=False)
 
     model_name = model_id.split("/")[1]
     os.makedirs(model_name, exist_ok=True)
@@ -105,33 +95,23 @@ def jit_trace():
     torch.jit.save(traced_model, f"{model_name}/{model_name}.pt")
     serving_file = os.path.join(model_name, "serving.properties")
     arguments = {
-        "engine":
-        "PyTorch",
-        "option.modelName":
-        model_name,
-        "option.mapLocation":
-        "true",
-        "width":
-        "224",
-        "height":
-        "224",
-        "resizeShort":
-        "true",
-        "toTensor":
-        "true",
-        "centerCrop":
-        "true",
-        "normalize":
-        "0.48145466,0.4578275,0.40821073,0.26862954,0.26130258,0.27577711",
-        "translatorFactory":
-        "ai.djl.huggingface.translator.ZeroShotImageClassificationTranslatorFactory",
+        "engine": "PyTorch",
+        "option.modelName": model_name,
+        "option.mapLocation": "true",
+        "width": "224",
+        "height": "224",
+        "resizeShort": "true",
+        "toTensor": "true",
+        "centerCrop": "true",
+        "normalize": "0.48145466,0.4578275,0.40821073,0.26862954,0.26130258,0.27577711",
+        "translatorFactory": "ai.djl.huggingface.translator.ZeroShotImageClassificationTranslatorFactory",
     }
 
-    with open(serving_file, 'w') as f:
+    with open(serving_file, "w") as f:
         for k, v in arguments.items():
             f.write(f"{k}={v}\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # main()
     jit_trace()

@@ -12,7 +12,6 @@ from torch import nn
 
 
 class ModelWrapper(nn.Module):
-
     def __init__(self, model) -> None:
         super().__init__()
         self.model = model.model
@@ -22,15 +21,11 @@ class ModelWrapper(nn.Module):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
     ) -> dict[str, torch.Tensor]:
-        last_hidden_state = self.model.model(
-            input_ids, attention_mask, return_dict=True).last_hidden_state
-        dense_vecs = self.model._dense_embedding(last_hidden_state,
-                                                 attention_mask)
+        last_hidden_state = self.model.model(input_ids, attention_mask, return_dict=True).last_hidden_state
+        dense_vecs = self.model._dense_embedding(last_hidden_state, attention_mask)
         dense_vecs = F.normalize(dense_vecs, dim=-1)
 
-        sparse_vecs = self.model._sparse_embedding(last_hidden_state,
-                                                   input_ids,
-                                                   return_embedding=False)
+        sparse_vecs = self.model._sparse_embedding(last_hidden_state, input_ids, return_embedding=False)
         return {
             "dense_vecs": dense_vecs,
             "sparse_vecs": sparse_vecs,
@@ -42,10 +37,7 @@ def main():
     sentences = ["What is BGE M3?", "Definition of BM25"]
 
     model = BGEM3FlagModel(model_id, devices=["cpu"])
-    output_1 = model.encode(sentences,
-                            return_dense=True,
-                            return_sparse=True,
-                            return_colbert_vecs=False)
+    output_1 = model.encode(sentences, return_dense=True, return_sparse=True, return_colbert_vecs=False)
     print(output_1)
 
     wrapper = ModelWrapper(model)
@@ -58,10 +50,9 @@ def main():
     sparse_vecs = output_2["sparse_vecs"]
 
     unused_tokens = set()
-    for _token in ['cls_token', 'eos_token', 'pad_token', 'unk_token']:
+    for _token in ["cls_token", "eos_token", "pad_token", "unk_token"]:
         if _token in model.tokenizer.special_tokens_map:
-            _token_id = model.tokenizer.convert_tokens_to_ids(
-                model.tokenizer.special_tokens_map[_token])
+            _token_id = model.tokenizer.convert_tokens_to_ids(model.tokenizer.special_tokens_map[_token])
             unused_tokens.add(_token_id)
 
     all_lexical_weights = []
@@ -90,8 +81,7 @@ def save_serving_properties(model_id: str):
         "option.mapLocation": "true",
         "padding": "true",
     }
-    file = hf_hub_download(repo_id=model_id,
-                           filename="sentence_bert_config.json")
+    file = hf_hub_download(repo_id=model_id, filename="sentence_bert_config.json")
     with open(file) as f:
         config = json.load(f)
         if config.get("max_seq_length"):
@@ -100,7 +90,7 @@ def save_serving_properties(model_id: str):
             arguments["doLowerCase"] = config.get("do_lower_case")
 
     serving_file = os.path.join(model_name, "serving.properties")
-    with open(serving_file, 'w') as f:
+    with open(serving_file, "w") as f:
         for k, v in arguments.items():
             f.write(f"{k}={v}\n")
 
@@ -115,9 +105,7 @@ def jit_trace():
     input_ids = embedding["input_ids"]
     attention_mask = embedding["attention_mask"]
 
-    traced_model = torch.jit.trace(ModelWrapper(model),
-                                   (input_ids, attention_mask),
-                                   strict=False)
+    traced_model = torch.jit.trace(ModelWrapper(model), (input_ids, attention_mask), strict=False)
 
     model_name = model_id.split("/")[1]
     os.makedirs(model_name, exist_ok=True)
@@ -132,6 +120,6 @@ def jit_trace():
     save_serving_properties(model_id)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
     # jit_trace()

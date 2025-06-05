@@ -7,7 +7,6 @@ from transformers import pipeline
 
 
 class ModelWrapper(nn.Module):
-
     def __init__(self, model) -> None:
         super().__init__()
         self.model = model
@@ -41,7 +40,7 @@ class ModelWrapper(nn.Module):
 
         return self.model(
             decoder_input_ids=decoder_input_ids,
-            encoder_outputs=(encoder_outputs, ),
+            encoder_outputs=(encoder_outputs,),
             attention_mask=attention_mask,
             past_key_values=tuple(past_kv_list),
             use_cache=True,
@@ -58,7 +57,7 @@ class ModelWrapper(nn.Module):
     ) -> Tuple[torch.Tensor]:
         return self.model(
             decoder_input_ids=decoder_input_ids,
-            encoder_outputs=(encoder_outputs, ),
+            encoder_outputs=(encoder_outputs,),
             attention_mask=attention_mask,
             use_cache=True,
             output_attentions=False,
@@ -67,10 +66,7 @@ class ModelWrapper(nn.Module):
         )
 
 
-def generate_dummy_past_key_values(num_heads=16,
-                                   num_layers=16,
-                                   kv_dims=64,
-                                   batch_size=1):
+def generate_dummy_past_key_values(num_heads=16, num_layers=16, kv_dims=64, batch_size=1):
     past_key_values = []
     for _ in range(num_layers):
         past_key_values.append(torch.zeros(batch_size, num_heads, 1, kv_dims))
@@ -91,10 +87,7 @@ def main():
     output = pipe(intput_text, num_beams=8)
     print(output)
 
-    encoding = pipe.tokenizer(intput_text,
-                              return_tensors="pt",
-                              max_length=1024,
-                              truncation=True)
+    encoding = pipe.tokenizer(intput_text, return_tensors="pt", max_length=1024, truncation=True)
     input_ids = encoding["input_ids"]
     attention_mask = encoding["attention_mask"]
 
@@ -103,21 +96,18 @@ def main():
     # print(decoder_outputs)
 
     traced_decoder = torch.jit.trace_module(
-        model, {
+        model,
+        {
             "encode": [input_ids, attention_mask],
-            "forward_init":
-            [attention_mask,
-             torch.tensor([[0]]), encoder_outputs[0]],
-            "forward": [
-                attention_mask,
-                torch.tensor([[0, 0]]), encoder_outputs[0], past_key_values
-            ],
-        })
+            "forward_init": [attention_mask, torch.tensor([[0]]), encoder_outputs[0]],
+            "forward": [attention_mask, torch.tensor([[0, 0]]), encoder_outputs[0], past_key_values],
+        },
+    )
 
     model_dir = model_id.split("/")[1]
     os.makedirs(model_dir, exist_ok=True)
     torch.jit.save(traced_decoder, f"{model_dir}/model.pt")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

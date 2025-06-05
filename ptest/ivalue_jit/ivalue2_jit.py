@@ -3,7 +3,6 @@ from torch import nn
 
 
 class IValueProcessing(nn.Module):
-
     def __init__(self):
         super(IValueProcessing, self).__init__()
 

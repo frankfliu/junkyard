@@ -20,7 +20,6 @@ from torch import nn
 
 
 class Sam2Wrapper(nn.Module):
-
     def __init__(
         self,
         sam_model: SAM2Base,
@@ -40,16 +39,14 @@ class Sam2Wrapper(nn.Module):
         input_image: torch.Tensor,
     ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         backbone_out = self.model.forward_image(input_image)
-        _, vision_feats, _, _ = self.model._prepare_backbone_features(
-            backbone_out)
+        _, vision_feats, _, _ = self.model._prepare_backbone_features(backbone_out)
         # Add no_mem_embed, which is added to the lowest rest feat. map during training on videos
         if self.model.directly_add_no_mem_embed:
             vision_feats[-1] = vision_feats[-1] + self.model.no_mem_embed
 
         feats = [
-            feat.permute(1, 2,
-                         0).view(1, -1, *feat_size) for feat, feat_size in zip(
-                             vision_feats[::-1], self._bb_feat_sizes[::-1])
+            feat.permute(1, 2, 0).view(1, -1, *feat_size)
+            for feat, feat_size in zip(vision_feats[::-1], self._bb_feat_sizes[::-1])
         ][::-1]
 
         return feats[-1], feats[0], feats[1]
@@ -61,8 +58,7 @@ class Sam2Wrapper(nn.Module):
         point_labels: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         image_embed, feature_1, feature_2 = self.extract_features(input_image)
-        return self.predict(point_coords, point_labels, image_embed, feature_1,
-                            feature_2)
+        return self.predict(point_coords, point_labels, image_embed, feature_1, feature_2)
 
     def predict(
         self,
@@ -100,14 +96,11 @@ def main():
     else:
         device = torch.device("cpu")
 
-    predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-tiny",
-                                                   device=device)
+    predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-tiny", device=device)
     model = Sam2Wrapper(predictor.model)
 
     img = Image.open("truck.jpg")
-    input_point = torch.tensor([[500, 375], [1125, 625]],
-                               dtype=torch.float,
-                               device=device)
+    input_point = torch.tensor([[500, 375], [1125, 625]], dtype=torch.float, device=device)
     input_label = torch.tensor([[1, 1]], dtype=torch.int32, device=device)
     # input_point = torch.tensor([[500, 375]], dtype=torch.float, device=device)
     # input_label = torch.tensor([[1]], dtype=torch.int32, device=device)
@@ -117,9 +110,7 @@ def main():
     input_image = predictor._transforms(img).to(device)
     input_image = input_image[None, ...]
 
-    unnorm_coords = predictor._transforms.transform_coords(input_point,
-                                                           normalize=True,
-                                                           orig_hw=(h, w))
+    unnorm_coords = predictor._transforms.transform_coords(input_point, normalize=True, orig_hw=(h, w))
     unnorm_coords = unnorm_coords[None, ...]
 
     with torch.inference_mode():
@@ -146,5 +137,5 @@ def main():
     print(f"scores: {scores}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

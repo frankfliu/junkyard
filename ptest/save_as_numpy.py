@@ -21,7 +21,7 @@ def to_raw_bytes(array):
     return array.tobytes()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     data = [np.zeros((1, 2)), np.ones((1, 128))]
 
     # Save single array into .npy file

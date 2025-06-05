@@ -12,7 +12,6 @@ from transformers import pipeline
 
 
 class ModelWrapper(nn.Module):
-
     def __init__(self, model) -> None:
         super().__init__()
         self.model = model
@@ -45,14 +44,14 @@ def main(model_id: str):
 
     question = "How many cats are there?"
     img_url = "http://images.cocodataset.org/val2017/000000039769.jpg"
-    image = Image.open(requests.get(img_url, stream=True).raw).convert('RGB')
+    image = Image.open(requests.get(img_url, stream=True).raw).convert("RGB")
 
-    encoding = pipe.tokenizer([question], padding=True, return_tensors='pt')
+    encoding = pipe.tokenizer([question], padding=True, return_tensors="pt")
     input_ids = encoding["input_ids"]
     attention_mask = encoding["attention_mask"]
     token_type_ids = encoding["token_type_ids"]
 
-    image_features = pipe.image_processor(images=image, return_tensors='pt')
+    image_features = pipe.image_processor(images=image, return_tensors="pt")
     pixel_values = image_features["pixel_values"]
     pixel_mask = image_features["pixel_mask"]
 
@@ -60,9 +59,8 @@ def main(model_id: str):
     print(result)
 
     traced_model = torch.jit.trace(
-        ModelWrapper(pipe.model),
-        (input_ids, attention_mask, token_type_ids, pixel_values, pixel_mask),
-        strict=False)
+        ModelWrapper(pipe.model), (input_ids, attention_mask, token_type_ids, pixel_values, pixel_mask), strict=False
+    )
 
     model_dir = model_id.split("/")[1]
     os.makedirs(model_dir, exist_ok=True)
@@ -72,7 +70,7 @@ def main(model_id: str):
     pipe.tokenizer.save_pretrained(model_dir)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # model_id = "Salesforce/blip-vqa-base"
     # model_id = "google/deplot"
     main("dandelin/vilt-b32-finetuned-vqa")

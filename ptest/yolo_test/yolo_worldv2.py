@@ -15,7 +15,6 @@ from ultralytics.nn.modules import C2fAttn, WorldDetect, ImagePoolingAttn
 
 
 class ClipModelWrapper(nn.Module):
-
     def __init__(self, model) -> None:
         super().__init__()
         self.clip_model = model
@@ -31,7 +30,6 @@ class ClipModelWrapper(nn.Module):
 
 
 class VisionModelWrapper(nn.Module):
-
     def __init__(self, model, save) -> None:
         super().__init__()
         self.vision_model = model
@@ -46,9 +44,7 @@ class VisionModelWrapper(nn.Module):
         y, _dt, _embeddings = [], [], []  # outputs
         for m in self.vision_model:  # except the head part
             if m.f != -1:  # if not from previous layer
-                x = y[m.f] if isinstance(
-                    m.f, int) else [x if j == -1 else y[j]
-                                    for j in m.f]  # from earlier layers
+                x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if isinstance(m, C2fAttn):
                 x = m(x, txt_feats)
             elif isinstance(m, WorldDetect):
@@ -66,33 +62,26 @@ class VisionModelWrapper(nn.Module):
 def save_serving_properties(model_name: str):
     serving_file = os.path.join(model_name, "serving.properties")
     arguments = {
-        "engine":
-        "PyTorch",
-        "option.modelName":
-        model_name,
-        "option.mapLocation":
-        "true",
-        "toTensor":
-        "true",
-        "applyRatio":
-        "true",
-        "translatorFactory":
-        "ai.djl.modality.cv.translator.YoloWorldTranslatorFactory",
+        "engine": "PyTorch",
+        "option.modelName": model_name,
+        "option.mapLocation": "true",
+        "toTensor": "true",
+        "applyRatio": "true",
+        "translatorFactory": "ai.djl.modality.cv.translator.YoloWorldTranslatorFactory",
     }
 
-    with open(serving_file, 'w') as f:
+    with open(serving_file, "w") as f:
         for k, v in arguments.items():
             f.write(f"{k}={v}\n")
 
 
 def save_tokenizer(model_name: str):
     tokenizer = SimpleTokenizer()
-    with open(f"{model_name}/vocab.json", "w", encoding='utf-8') as f:
+    with open(f"{model_name}/vocab.json", "w", encoding="utf-8") as f:
         json.dump(tokenizer.encoder, f)
 
-    sorted_dict = dict(
-        sorted(tokenizer.bpe_ranks.items(), key=lambda item: item[1]))
-    with open(f"{model_name}/merges.txt", "w", encoding='utf-8') as f:
+    sorted_dict = dict(sorted(tokenizer.bpe_ranks.items(), key=lambda item: item[1]))
+    with open(f"{model_name}/merges.txt", "w", encoding="utf-8") as f:
         f.write("#version: 0.2")
         for key in sorted_dict.keys():
             f.write(f"\n{key[0]} {key[1]}")

@@ -17,13 +17,10 @@ from optimum.commands import optimum_cli
 
 def main():
     model_id = "openai/whisper-tiny"
-    sys.argv = [
-        "model_zoo_importer.py", "export", "onnx", "-m", model_id,
-        "--optimize", "O3", "--monolith", "onnx"
-    ]
+    sys.argv = ["model_zoo_importer.py", "export", "onnx", "-m", model_id, "--optimize", "O3", "--monolith", "onnx"]
 
     optimum_cli.main()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

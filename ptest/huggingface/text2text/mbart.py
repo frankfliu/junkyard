@@ -7,7 +7,6 @@ from transformers import AutoTokenizer, MBartForConditionalGeneration
 
 
 class ModelWrapper(nn.Module):
-
     def __init__(self, model) -> None:
         super().__init__()
         self.model = model
@@ -41,7 +40,7 @@ class ModelWrapper(nn.Module):
 
         return self.model(
             decoder_input_ids=decoder_input_ids,
-            encoder_outputs=(encoder_outputs, ),
+            encoder_outputs=(encoder_outputs,),
             attention_mask=attention_mask,
             past_key_values=tuple(past_kv_list),
             use_cache=True,
@@ -58,7 +57,7 @@ class ModelWrapper(nn.Module):
     ) -> Tuple[torch.Tensor]:
         return self.model(
             decoder_input_ids=decoder_input_ids,
-            encoder_outputs=(encoder_outputs, ),
+            encoder_outputs=(encoder_outputs,),
             attention_mask=attention_mask,
             use_cache=True,
             output_attentions=False,
@@ -67,10 +66,7 @@ class ModelWrapper(nn.Module):
         )
 
 
-def generate_dummy_past_key_values(num_heads=16,
-                                   num_layers=12,
-                                   kv_dims=64,
-                                   batch_size=1):
+def generate_dummy_past_key_values(num_heads=16, num_layers=12, kv_dims=64, batch_size=1):
     past_key_values = []
     for _ in range(num_layers):
         past_key_values.append(torch.zeros(batch_size, num_heads, 1, kv_dims))
@@ -84,9 +80,7 @@ def generate_dummy_past_key_values(num_heads=16,
 def jit_trace():
     model_id = "facebook/mbart-large-50-many-to-many-mmt"
     mbart = MBartForConditionalGeneration.from_pretrained(model_id)
-    tokenizer = AutoTokenizer.from_pretrained(model_id,
-                                              src_lang="fr_XX",
-                                              tgt_lang="en_XX")
+    tokenizer = AutoTokenizer.from_pretrained(model_id, src_lang="fr_XX", tgt_lang="en_XX")
     model = ModelWrapper(mbart)
 
     input_text = "Le chef de l 'ONU affirme qu 'il n 'y a pas de solution militai"
@@ -100,16 +94,13 @@ def jit_trace():
     # print(decoder_outputs)
 
     traced_decoder = torch.jit.trace_module(
-        model, {
+        model,
+        {
             "encode": [input_ids, attention_mask],
-            "forward_init":
-            [attention_mask,
-             torch.tensor([[0]]), encoder_outputs[0]],
-            "forward": [
-                attention_mask,
-                torch.tensor([[0, 0]]), encoder_outputs[0], past_key_values
-            ],
-        })
+            "forward_init": [attention_mask, torch.tensor([[0]]), encoder_outputs[0]],
+            "forward": [attention_mask, torch.tensor([[0, 0]]), encoder_outputs[0], past_key_values],
+        },
+    )
 
     model_dir = model_id.split("/")[1]
     os.makedirs(model_dir, exist_ok=True)
@@ -119,9 +110,7 @@ def jit_trace():
 def main():
     model_id = "facebook/mbart-large-50-many-to-many-mmt"
     model = MBartForConditionalGeneration.from_pretrained(model_id)
-    tokenizer = AutoTokenizer.from_pretrained(model_id,
-                                              src_lang="fr_XX",
-                                              tgt_lang="en_XX")
+    tokenizer = AutoTokenizer.from_pretrained(model_id, src_lang="fr_XX", tgt_lang="en_XX")
     # tokenizer.save_pretrained("output/mbart-large")
     # tokenizer = AutoTokenizer.from_pretrained("mbart-large",
     #                                           src_lang="fr_XX",
@@ -130,9 +119,8 @@ def main():
 
     model_inputs = tokenizer(input_text, return_tensors="pt")
     generated_tokens = model.generate(
-        **model_inputs,
-        num_beams=2,
-        forced_bos_token_id=tokenizer.lang_code_to_id["en_XX"])
+        **model_inputs, num_beams=2, forced_bos_token_id=tokenizer.lang_code_to_id["en_XX"]
+    )
     output = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
     print(output)
@@ -141,9 +129,7 @@ def main():
 def convert2onnx():
     model_id = "facebook/mbart-large-50-many-to-many-mmt"
     model = MBartForConditionalGeneration.from_pretrained(model_id)
-    tokenizer = AutoTokenizer.from_pretrained(model_id,
-                                              src_lang="fr_XX",
-                                              tgt_lang="en_XX")
+    tokenizer = AutoTokenizer.from_pretrained(model_id, src_lang="fr_XX", tgt_lang="en_XX")
 
     input_text = "Le chef de l 'ONU affirme qu 'il n 'y a pas de solution militai"
     model_inputs = tokenizer(input_text, return_tensors="pt")
@@ -152,18 +138,17 @@ def convert2onnx():
 
     # Export to ONNX format:
     torch.onnx.export(
-        model, (model_inputs["input_ids"], model_inputs["attention_mask"]),
+        model,
+        (model_inputs["input_ids"], model_inputs["attention_mask"]),
         onnx_path,
         input_names=["input_ids", "attention_mask"],
         output_names=["logits"],
-        dynamic_axes={"input_ids": {
-            0: "batch",
-            1: "sequence"
-        }},
-        opset_version=14)
+        dynamic_axes={"input_ids": {0: "batch", 1: "sequence"}},
+        opset_version=14,
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # jit_trace()
     main()
     # convert2onnx()

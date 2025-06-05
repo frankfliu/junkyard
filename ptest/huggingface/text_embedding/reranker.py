@@ -11,12 +11,11 @@
 # BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, express or implied. See the License for
 # the specific language governing permissions and limitations under the License.
 import torch
-from sentence_transformers import CrossEncoder
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModel, pipeline
+from transformers import AutoTokenizer, pipeline
 
 
 def main():
-    pairs = [['what is panda?', 'hi']]
+    pairs = [["what is panda?", "hi"]]
 
     model_id = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
@@ -26,20 +25,14 @@ def main():
     #
     # model = AutoModelForSequenceClassification.from_pretrained(model_id)
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    inputs = tokenizer(pairs,
-                       padding=True,
-                       truncation=True,
-                       return_tensors="pt",
-                       max_length=512)
+    inputs = tokenizer(pairs, padding=True, truncation=True, return_tensors="pt", max_length=512)
     #
     # model.eval()
     # with torch.no_grad():
     #     scores = model(**inputs, return_dict=True).logits
     #     print(scores)
 
-    model = pipeline(task='text-classification',
-                     model=model_id,
-                     framework="pt")
+    model = pipeline(task="text-classification", model=model_id, framework="pt")
     scores = model.predict({"text": "what is panda?", "text_pair": "hi"})
 
     # inputs = tokenizer.encode_plus("what is panda?", text_pair="hi", return_tensors='pt')
@@ -47,12 +40,10 @@ def main():
     attention_mask = inputs["attention_mask"]
     token_type_ids = inputs.get("token_type_ids")
 
-    traced_model = torch.jit.trace(model.model,
-                                   (input_ids, attention_mask, token_type_ids),
-                                   strict=False)
+    traced_model = torch.jit.trace(model.model, (input_ids, attention_mask, token_type_ids), strict=False)
     torch.jit.save(traced_model, "traced.pt")
     print(scores)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

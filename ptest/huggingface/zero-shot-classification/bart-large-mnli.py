@@ -6,7 +6,6 @@ from transformers import pipeline
 
 
 class ModelWrapper(nn.Module):
-
     def __init__(self, model) -> None:
         super().__init__()
         self.model = model
@@ -23,34 +22,27 @@ def main():
     model_id = "facebook/bart-large-mnli"
     classifier = pipeline("zero-shot-classification", model=model_id)
     sequence_to_classify = "one day I will see the world"
-    candidate_labels = ['travel', 'cooking', 'dancing']
+    candidate_labels = ["travel", "cooking", "dancing"]
     output = classifier(sequence_to_classify, candidate_labels)
     print(output)
 
-    candidate_labels = ['travel', 'cooking', 'dancing', 'exploration']
-    output = classifier(sequence_to_classify,
-                        candidate_labels,
-                        multi_label=True)
+    candidate_labels = ["travel", "cooking", "dancing", "exploration"]
+    output = classifier(sequence_to_classify, candidate_labels, multi_label=True)
     print(output)
 
 
 def pytorch_prediction():
     model_id = "facebook/bart-large-mnli"
-    classifier = pipeline("zero-shot-classification",
-                          model=model_id,
-                          device="cpu")
+    classifier = pipeline("zero-shot-classification", model=model_id, device="cpu")
     model = classifier.model
     tokenizer = classifier.tokenizer
 
     sequence_to_classify = "one day I will see the world"
-    candidate_labels = ['travel', 'cooking', 'dancing']
+    candidate_labels = ["travel", "cooking", "dancing"]
     for label in candidate_labels:
-        hypothesis = f'This example is {label}.'
+        hypothesis = f"This example is {label}."
 
-        encoding = tokenizer(sequence_to_classify,
-                             hypothesis,
-                             return_tensors='pt',
-                             truncation_strategy='only_first')
+        encoding = tokenizer(sequence_to_classify, hypothesis, return_tensors="pt", truncation_strategy="only_first")
         input_ids = encoding["input_ids"]
         attention_mask = encoding["attention_mask"]
         output = model(input_ids, attention_mask)
@@ -67,20 +59,15 @@ def pytorch_prediction():
 
 def trace():
     model_id = "facebook/bart-large-mnli"
-    classifier = pipeline("zero-shot-classification",
-                          model=model_id,
-                          device="cpu")
+    classifier = pipeline("zero-shot-classification", model=model_id, device="cpu")
 
     model = ModelWrapper(classifier.model.model)
     tokenizer = classifier.tokenizer
 
     sequence_to_classify = "one day I will see the world"
-    hypothesis = f'This example is travel.'
+    hypothesis = "This example is travel."
 
-    encoding = tokenizer(sequence_to_classify,
-                         hypothesis,
-                         return_tensors='pt',
-                         truncation_strategy='only_first')
+    encoding = tokenizer(sequence_to_classify, hypothesis, return_tensors="pt", truncation_strategy="only_first")
     input_ids = encoding["input_ids"]
     attention_mask = encoding["attention_mask"]
 
@@ -91,7 +78,7 @@ def trace():
     torch.jit.save(traced_model, f"{model_dir}/model.pt")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
     # pytorch_prediction()
     # trace()

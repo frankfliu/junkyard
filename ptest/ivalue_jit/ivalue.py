@@ -7,26 +7,20 @@ from torch import nn, Tensor
 
 
 class IValueProcessing(nn.Module):
-
     def __init__(self):
         super(IValueProcessing, self).__init__()
 
     def forward(self, input1: int, input2: int, input3: int) -> List[int]:
         # import pdb;
         # pdb.set_trace()
-        return self.choose_event_times_tensor(input1, input2,
-                                              input3).data.tolist()
+        return self.choose_event_times_tensor(input1, input2, input3).data.tolist()
 
     @torch.jit.export
-    def choose_event_times_tensor(self, T: int, nevent: int,
-                                  min_spacing: int) -> Tensor:
+    def choose_event_times_tensor(self, T: int, nevent: int, min_spacing: int) -> Tensor:
         cond = False
         times = torch.randint(low=0, high=T, size=[nevent], dtype=torch.int64)
         while not cond:
-            times = torch.randint(low=0,
-                                  high=T,
-                                  size=[nevent],
-                                  dtype=torch.int64)
+            times = torch.randint(low=0, high=T, size=[nevent], dtype=torch.int64)
             if nevent > 1:
                 diffcond = False
                 diffs = []
@@ -35,22 +29,13 @@ class IValueProcessing(nn.Module):
                     item: List[int] = tensor.data.tolist()
                     x, y = item
                     diffs.append(torch.abs(torch.tensor(x - y)))
-                    diffcond = bool(
-                        torch.all(
-                            torch.tensor([
-                                diff.item() > min_spacing for diff in diffs
-                            ])).item())
+                    diffcond = bool(torch.all(torch.tensor([diff.item() > min_spacing for diff in diffs])).item())
             else:
                 diffcond = True
             # startcond = torch.all(times > 20)
-            startcond = bool(
-                torch.all(torch.tensor([time.item() > 20
-                                        for time in times])).item())
+            startcond = bool(torch.all(torch.tensor([time.item() > 20 for time in times])).item())
             # endcond = torch.all(times < T - 20)
-            endcond = bool(
-                torch.all(
-                    torch.tensor([time.item() < T - 20
-                                  for time in times])).item())
+            endcond = bool(torch.all(torch.tensor([time.item() < T - 20 for time in times])).item())
             cond = diffcond and startcond and endcond
         return times
 
@@ -69,5 +54,5 @@ def main():
     print(output)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

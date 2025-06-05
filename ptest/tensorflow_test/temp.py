@@ -4,10 +4,9 @@ import tensorflow.keras as keras
 
 
 def main():
-    loaded_model = keras.models.load_model(
-        "models/deepdanbooru-v3-20211112-sgd-e28/model-resnet_custom_v3.h5")
+    loaded_model = keras.models.load_model("models/deepdanbooru-v3-20211112-sgd-e28/model-resnet_custom_v3.h5")
     tf.saved_model.save(loaded_model, "resnet/1/")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

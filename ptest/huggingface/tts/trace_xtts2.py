@@ -12,11 +12,8 @@ def main():
 
     # wav = tts.tts(text="Hello world!", speaker_wav="LJ001-0001.wav", language="en")
     # Text to speech to a file
-    tts.tts_to_file(text="Hello world!",
-                    speaker_wav="LJ001-0001.wav",
-                    language="en",
-                    file_path="output.wav")
+    tts.tts_to_file(text="Hello world!", speaker_wav="LJ001-0001.wav", language="en", file_path="output.wav")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

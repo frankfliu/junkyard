@@ -29,5 +29,5 @@ def main():
         mask[m > 0.5] = [255, 0, 0]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

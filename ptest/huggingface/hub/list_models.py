@@ -15,9 +15,7 @@ from huggingface_hub import snapshot_download
 def print_pooling_mode():
     category = "sentence-similarity"
     api = HfApi()
-    models = api.list_models(filter=f"{category},pytorch",
-                             sort="downloads",
-                             direction=-1)
+    models = api.list_models(filter=f"{category},pytorch", sort="downloads", direction=-1)
     if not models:
         logging.warning(f"no model matches category: {category}.")
 
@@ -25,8 +23,7 @@ def print_pooling_mode():
     for model_info in models:
         model_id = model_info.modelId
         try:
-            file = hf_hub_download(repo_id=model_id,
-                                   filename="1_Pooling/config.json")
+            file = hf_hub_download(repo_id=model_id, filename="1_Pooling/config.json")
             if os.path.exists(file):
                 with open(file, "r") as f:
                     pooling = json.load(f)
@@ -54,10 +51,7 @@ def download_model(model_id: str):
 
 def list_models():
     api = HfApi()
-    models = api.list_models(filter="modernbert",
-                             sort="downloads",
-                             direction=-1,
-                             limit=100)
+    models = api.list_models(filter="modernbert", sort="downloads", direction=-1, limit=100)
 
     tasks = defaultdict(list)
     for model_info in models:
@@ -70,8 +64,6 @@ def list_models():
             print(f"{k}: {model_id}")
 
 
-if __name__ == '__main__':
-    logging.basicConfig(stream=sys.stdout,
-                        format="%(message)s",
-                        level=logging.INFO)
+if __name__ == "__main__":
+    logging.basicConfig(stream=sys.stdout, format="%(message)s", level=logging.INFO)
     list_models()

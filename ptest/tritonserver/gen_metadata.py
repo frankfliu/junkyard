@@ -19,14 +19,14 @@ def gen_header(batch: int):
     input6_data = np.zeros((batch, 1), dtype=np.int32)
     input7_data = np.zeros((batch, 1), dtype=np.int32)
 
-    inputs.append(InferInput('BERT_ENCODING__0', [batch, 6, 768], "FP32"))
-    inputs.append(InferInput('ATTENTION_MASK__1', [batch, 6], "INT32"))
-    inputs.append(InferInput('TOKEN_TYPES__2', [batch, 6], "INT32"))
-    inputs.append(InferInput('PREV_INTENT__3', [batch, 1], "INT32"))
-    inputs.append(InferInput('PREV_DA__4', [batch, 1], "INT32"))
-    inputs.append(InferInput('PREV_SLOT_TO_ELICIT__5', [batch, 1], "INT32"))
-    inputs.append(InferInput('ACTIVE_CONTEXT__6', [batch, 1], "INT32"))
-    inputs.append(InferInput('VALID_LENGTH__7', [batch, 1], "INT32"))
+    inputs.append(InferInput("BERT_ENCODING__0", [batch, 6, 768], "FP32"))
+    inputs.append(InferInput("ATTENTION_MASK__1", [batch, 6], "INT32"))
+    inputs.append(InferInput("TOKEN_TYPES__2", [batch, 6], "INT32"))
+    inputs.append(InferInput("PREV_INTENT__3", [batch, 1], "INT32"))
+    inputs.append(InferInput("PREV_DA__4", [batch, 1], "INT32"))
+    inputs.append(InferInput("PREV_SLOT_TO_ELICIT__5", [batch, 1], "INT32"))
+    inputs.append(InferInput("ACTIVE_CONTEXT__6", [batch, 1], "INT32"))
+    inputs.append(InferInput("VALID_LENGTH__7", [batch, 1], "INT32"))
 
     # Initialize the data
     inputs[0].set_data_from_numpy(input0_data, binary_data=True)
@@ -38,17 +38,17 @@ def gen_header(batch: int):
     inputs[6].set_data_from_numpy(input6_data, binary_data=False)
     inputs[7].set_data_from_numpy(input7_data, binary_data=False)
 
-    outputs.append(InferOutput('INTENT_SCORES__0', binary_data=True))
-    outputs.append(InferOutput('SLOT_SCORES__1', binary_data=True))
+    outputs.append(InferOutput("INTENT_SCORES__0", binary_data=True))
+    outputs.append(InferOutput("SLOT_SCORES__1", binary_data=True))
 
     infer_request = {
-        'inputs': [input.get_tensor() for input in inputs],
-        'outputs': [output.get_tensor() for output in outputs]
+        "inputs": [input.get_tensor() for input in inputs],
+        "outputs": [output.get_tensor() for output in outputs],
     }
 
     return json.dumps(infer_request)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     headers = gen_header(32)
     print(headers)
