@@ -14,8 +14,8 @@ pre-commit:
 #
 # Formatting
 #
-.PHONY: chores
-chores: ruff_fixes black_fixes dapperdata_fixes tomlsort_fixes
+.PHONY: fix
+fix: ruff_fixes black_fixes dapperdata_fixes tomlsort_fixes
 
 .PHONY: ruff_fixes
 ruff_fixes:
