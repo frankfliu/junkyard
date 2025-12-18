@@ -31,7 +31,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -206,6 +205,7 @@ public final class AwsCurl {
             if (stopTime != Long.MAX_VALUE) {
                 logger.info("Benchmark will stop at: {}", new Date(stopTime));
             }
+            Map<Integer, String> responses = new ConcurrentHashMap<>();
             for (int i = 0; i < clients; ++i) {
                 final int clientId = i;
                 final int clientDelay = config.getDelay();
@@ -219,15 +219,16 @@ public final class AwsCurl {
                             long[] requestTime = {0L, -1L};
                             while (totalReq.getAndDecrement() > 0
                                     && System.currentTimeMillis() < stopTime) {
+                                int requestId = config.getRequestId();
                                 SignableRequest request = new SignableRequest(serviceName, uri);
-                                request.setContent(config.getRequestBody());
+                                request.setContent(config.getRequestBody(requestId));
                                 request.setHeaders(config.getRequestHeaders());
                                 request.setHttpMethod(config.getRequestMethod());
                                 request.setSigner(signer);
                                 request.sign();
                                 requestTime[0] = 0L;
                                 requestTime[1] = -1L;
-                                HttpResponse<InputStream> resp =
+                                Response resp =
                                         client.sendRequest(
                                                 request,
                                                 os,
@@ -275,6 +276,7 @@ public final class AwsCurl {
                                 }
 
                                 if (code < 300) {
+                                    responses.put(requestId, resp.body());
                                     success.add(requestTime[0]);
                                 } else {
                                     errors.getAndIncrement();
@@ -924,10 +926,9 @@ public final class AwsCurl {
             return url;
         }
 
-        @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
-        public byte[] getRequestBody() throws IOException {
+        public int getRequestId() throws IOException {
             if (forceGet) {
-                return null;
+                return -1;
             }
 
             /*
@@ -938,8 +939,7 @@ public final class AwsCurl {
              *  4. --upload-file
              */
             if (!dataset.isEmpty()) {
-                int i = index.incrementAndGet() % dataset.size();
-                return dataset.get(i);
+                return index.incrementAndGet() % dataset.size();
             }
 
             if (form != null || formString != null) {
@@ -951,7 +951,8 @@ public final class AwsCurl {
 
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 mb.writeTo(bos);
-                return bos.toByteArray();
+                dataset.add(bos.toByteArray());
+                return 0;
             }
 
             if (data != null || dataRaw != null || dataUrlencode != null) {
@@ -962,7 +963,8 @@ public final class AwsCurl {
                 addUrlEncodedData(bos, dataRaw, 2);
                 addUrlEncodedData(bos, dataUrlencode, 3);
                 bos.close();
-                return bos.toByteArray();
+                dataset.add(bos.toByteArray());
+                return 0;
             }
 
             if (uploadFile != null) {
@@ -971,10 +973,18 @@ public final class AwsCurl {
                 if (contentType == null) {
                     contentType = getMimeType(uploadFile);
                 }
-                return readFile(uploadFile);
+                dataset.add(readFile(uploadFile));
+                return 0;
             }
+            return -1;
+        }
 
-            return null;
+        @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
+        public byte[] getRequestBody(int requestId) throws IOException {
+            if (requestId < 0) {
+                return null;
+            }
+            return dataset.get(requestId);
         }
 
         void setContentType() {

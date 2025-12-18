@@ -45,7 +45,7 @@ final class Client {
         this.client = client;
     }
 
-    public HttpResponse<InputStream> sendRequest(
+    public Response sendRequest(
             SignableRequest request,
             OutputStream ps,
             boolean dumpHeader,
@@ -94,9 +94,9 @@ final class Client {
         }
 
         if (code >= 300 && ps instanceof NullOutputStream) {
-            System.out.println(
-                    "HTTP error (" + resp.statusCode() + "): " + Utils.toString(resp.body()));
-            return resp;
+            String body = Utils.toString(resp.body());
+            System.out.println("HTTP error (" + resp.statusCode() + "): " + body);
+            return new Response(code, body, headers);
         }
 
         List<String> ctHeader = headers.allValues("Content-Type");
@@ -109,16 +109,18 @@ final class Client {
             }
         }
 
-        HttpResponse<InputStream> ret = resp;
+        Response ret;
         try (FirstByteCounterInputStream is = new FirstByteCounterInputStream(resp.body())) {
             if (tokens != null) {
                 JsonUtils.resetException();
                 if (contentType == null || "text/plain".equals(contentType)) {
                     String body = Utils.toString(is);
+                    ret = new Response(code, body, headers);
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
                     updateTokenCount(Collections.singletonList(body), tokens, request);
                 } else if ("application/json".equals(contentType)) {
                     String body = Utils.toString(is);
+                    ret = new Response(code, body, headers);
                     ps.write(body.getBytes(StandardCharsets.UTF_8));
                     try {
                         JsonElement element = JsonUtils.GSON.fromJson(body, JsonElement.class);
@@ -127,7 +129,7 @@ final class Client {
                         updateTokenCount(lines, tokens, request);
                     } catch (JsonParseException e) {
                         AwsCurl.logger.warn("Invalid json response: {}", body);
-                        ret = new ErrorHttpResponse();
+                        ret = new Response(500, null, headers);
                     }
                 } else if ("application/jsonlines".equals(contentType)) {
                     boolean hasError = false;
@@ -139,25 +141,45 @@ final class Client {
                             hasError = JsonUtils.processJsonLine(list, ps, line, jq) || hasError;
                         }
                         updateTokenCount(list, tokens, request);
+                        ret = new Response(code, String.join("", list), headers);
                     }
                     if (hasError) {
-                        ret = new ErrorHttpResponse();
+                        ret = new Response(500, null, headers);
                     }
                 } else if ("text/event-stream".equals(contentType)) {
-                    handleServerSentEvent(is, requestTime, begin, jq, tokens, request, ps);
+                    String body =
+                            handleServerSentEvent(is, requestTime, begin, jq, tokens, request, ps);
+                    ret = new Response(code, body, headers);
                 } else if ("application/vnd.amazon.eventstream".equals(contentType)) {
                     String realContentType =
                             headers.firstValue("X-Amzn-SageMaker-Content-Type").orElse(null);
-                    handleEventStream(
-                            is, ps, realContentType, requestTime, begin, jq, tokens, request);
+                    String body =
+                            handleEventStream(
+                                    is,
+                                    ps,
+                                    realContentType,
+                                    requestTime,
+                                    begin,
+                                    jq,
+                                    tokens,
+                                    request);
+                    ret = new Response(code, body, headers);
+                } else {
+                    String body = Utils.toString(is);
+                    ret = new Response(code, body, headers);
                 }
             } else if ("application/vnd.amazon.eventstream".equals(contentType)) {
                 String realContentType =
                         headers.firstValue("X-Amzn-SageMaker-Content-Type").orElse(null);
-                handleEventStream(is, ps, realContentType, requestTime, begin, jq, null, request);
+                String body =
+                        handleEventStream(
+                                is, ps, realContentType, requestTime, begin, jq, null, request);
+                ret = new Response(code, body, headers);
             } else {
-                is.transferTo(ps);
+                byte[] body = Utils.toByteArray(is);
+                ps.write(body);
                 ps.flush();
+                ret = new Response(code, new String(body, StandardCharsets.UTF_8), headers);
             }
             requestTime[0] += System.nanoTime() - begin;
             if (requestTime[1] == -1) {
@@ -168,7 +190,7 @@ final class Client {
         }
     }
 
-    private static void handleServerSentEvent(
+    private static String handleServerSentEvent(
             InputStream is,
             long[] requestTime,
             long begin,
@@ -199,9 +221,10 @@ final class Client {
                 updateTokenCount(list, tokens, request);
             }
         }
+        return String.join("", list);
     }
 
-    private static void handleEventStream(
+    private static String handleEventStream(
             InputStream is,
             OutputStream ps,
             String realContentType,
@@ -245,9 +268,9 @@ final class Client {
             realContentType = DEFAULT_CONTENT_TYPE;
         }
         if ("text/event-stream".equalsIgnoreCase(realContentType)) {
-            handleServerSentEvent(bis, requestTime, begin, jq, tokens, request, ps);
+            String body = handleServerSentEvent(bis, requestTime, begin, jq, tokens, request, ps);
             requestTime[1] = -1; // rely on FirstByteCounterInputStream
-            return;
+            return body;
         }
         List<StringBuilder> list = new ArrayList<>();
         Scanner scanner = new Scanner(bis, StandardCharsets.UTF_8);
@@ -262,6 +285,7 @@ final class Client {
         if (tokens != null) {
             updateTokenCount(list, tokens, request);
         }
+        return String.join("", list);
     }
 
     public static Map<String, List<String>> parseQueryString(String queryString) {
