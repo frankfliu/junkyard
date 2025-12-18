@@ -4,6 +4,12 @@
 
 ```bash
 gcloud init
+gcloud auth login
+gcloud config configurations list
+gcloud config configurations create dev
+gcloud config configurations activate dev
+gcloud config set account XXX
+
 gcloud config list --format=json
 gcloud config set project $PROJECT
 gcloud auth application-default set-quota-project $PROJECT
@@ -12,7 +18,7 @@ gcloud config set billing/quota_project $PROJECT
 gcloud auth application-default login
 
 gcloud config set compute/region us-central1
-gcloud config set compute/zone us-central1-c
+gcloud config set compute/zone us-central1-b
 gcloud config set ai/region us-central1
 
 gcloud projects describe $PROJECT --format="value(projectNumber)
