@@ -47,4 +47,4 @@ tokenizer.json
 tokenizer_config.json
 vocab.json
 vocab.txt
-
+temp.*
