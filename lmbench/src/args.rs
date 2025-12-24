@@ -1,4 +1,5 @@
 use clap::Parser;
+use reqwest::Method;
 use std::path::PathBuf;
 
 /// A curl-like tool for interacting with LLMs
@@ -89,10 +90,6 @@ pub(crate) struct Args {
     #[arg(long)]
     pub(crate) silent: bool,
 
-    /// Transfer FILE to destination
-    #[arg(short = 'T', long, value_name = "FILE")]
-    pub(crate) upload_file: Option<PathBuf>,
-
     /// Output token per seconds
     #[arg(short, long)]
     pub(crate) tokens: bool,
@@ -112,4 +109,25 @@ pub(crate) struct Args {
     /// http/https URL
     #[arg()]
     pub(crate) url: String,
+}
+
+impl Args {
+    pub(crate) fn get_method(&self) -> Method {
+        if let Some(method) = &self.request {
+            return Method::from_bytes(method.as_bytes()).unwrap_or(Method::GET);
+        }
+        if self.get {
+            return Method::GET;
+        }
+        if self.data.is_some()
+            || self.data_raw.is_some()
+            || self.data_urlencode.is_some()
+            || !self.form.is_empty()
+            || !self.form_string.is_empty()
+            || self.dataset.is_some()
+        {
+            return Method::POST;
+        }
+        Method::GET
+    }
 }

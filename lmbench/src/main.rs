@@ -1,4 +1,5 @@
 pub(crate) mod args;
+pub(crate) mod record;
 pub(crate) mod stats;
 
 use args::Args;
@@ -7,7 +8,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use rand::Rng;
-use reqwest::{Client, Method, multipart};
+use record::Record;
+use reqwest::Client;
 
 use serde_json::{Value, from_str};
 use stats::generate_stats;
@@ -85,11 +87,15 @@ async fn main() -> Result<(), anyhow::Error> {
                     }
                 }
 
-                let method = get_method(&cli);
-                let mut request_builder = client.request(method, &cli.url);
-                request_builder = add_headers(request_builder, &cli.header);
                 let body = if !dataset.is_empty() {
                     Some(dataset[i as usize % dataset.len()].clone())
+                } else if let Some(data) = &cli.data {
+                    Some(data.clone())
+                } else if let Some(data) = &cli.data_raw {
+                    Some(data.clone())
+                } else if let Some(data) = &cli.data_urlencode {
+                    let encoded: String = serde_urlencoded::to_string(data)?;
+                    Some(encoded)
                 } else {
                     None
                 };
@@ -100,7 +106,8 @@ async fn main() -> Result<(), anyhow::Error> {
                     }
                 }
 
-                request_builder = add_body(request_builder, &cli, body).await?;
+                let record = Record::new(&cli, body);
+                let request_builder = record.into_request_builder(&client, &cli.url).await?;
 
                 let start = Instant::now();
                 let res = request_builder.send().await?;
@@ -154,8 +161,8 @@ async fn main() -> Result<(), anyhow::Error> {
         all_input_tokens += total_input_tokens;
     }
 
+    let stats = generate_stats(&all_latencies, all_output_tokens, all_input_tokens);
     if cli.json_output || cli.json_path.is_some() {
-        let stats = generate_stats(&all_latencies, all_output_tokens, all_input_tokens);
         let json = serde_json::to_string_pretty(&stats)?;
         if let Some(path) = cli.json_path {
             fs::write(path, json)?;
@@ -163,88 +170,10 @@ async fn main() -> Result<(), anyhow::Error> {
             println!("{}", json);
         }
     } else {
-        let stats = generate_stats(&all_latencies, all_output_tokens, all_input_tokens);
         println!("{}", stats);
     }
 
     Ok(())
-}
-
-fn get_method(cli: &Args) -> Method {
-    if let Some(method) = &cli.request {
-        return Method::from_bytes(method.as_bytes()).unwrap_or(Method::GET);
-    }
-    if cli.get {
-        return Method::GET;
-    }
-    if cli.data.is_some()
-        || cli.data_raw.is_some()
-        || cli.data_urlencode.is_some()
-        || !cli.form.is_empty()
-        || !cli.form_string.is_empty()
-        || cli.upload_file.is_some()
-        || cli.dataset.is_some()
-    {
-        return Method::POST;
-    }
-    Method::GET
-}
-
-fn add_headers(
-    mut request_builder: reqwest::RequestBuilder,
-    headers: &[String],
-) -> reqwest::RequestBuilder {
-    for header in headers {
-        let parts: Vec<&str> = header.splitn(2, ':').collect();
-        if parts.len() == 2 {
-            request_builder = request_builder.header(parts[0].trim(), parts[1].trim());
-        }
-    }
-    request_builder
-}
-
-async fn add_body(
-    request_builder: reqwest::RequestBuilder,
-    cli: &Args,
-    body: Option<String>,
-) -> Result<reqwest::RequestBuilder, anyhow::Error> {
-    if let Some(body) = body {
-        return Ok(request_builder.body(body));
-    }
-    if let Some(data) = &cli.data {
-        return Ok(request_builder.body(data.clone()));
-    }
-    if let Some(data) = &cli.data_raw {
-        return Ok(request_builder.body(data.clone()));
-    }
-    if let Some(data) = &cli.data_urlencode {
-        let encoded: String = serde_urlencoded::to_string(data)?;
-        return Ok(request_builder.body(encoded));
-    }
-    if !cli.form.is_empty() || !cli.form_string.is_empty() {
-        let mut form = multipart::Form::new();
-        for item in &cli.form {
-            let (key, value) = item.split_once('=').unwrap_or(("", ""));
-            if value.starts_with('@') {
-                let path = &value[1..];
-                let file_content = tokio::fs::read(path).await?;
-                let part = multipart::Part::bytes(file_content);
-                form = form.part(key.to_string(), part);
-            } else {
-                form = form.text(key.to_string(), value.to_string());
-            }
-        }
-        for item in &cli.form_string {
-            let (key, value) = item.split_once('=').unwrap_or(("", ""));
-            form = form.text(key.to_string(), value.to_string());
-        }
-        return Ok(request_builder.multipart(form));
-    }
-    if let Some(path) = &cli.upload_file {
-        let file = tokio::fs::read(path).await?;
-        return Ok(request_builder.body(file));
-    }
-    Ok(request_builder)
 }
 
 fn load_dataset(

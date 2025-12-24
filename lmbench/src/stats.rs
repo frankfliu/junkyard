@@ -77,7 +77,6 @@ pub fn generate_stats(
 
 impl fmt::Display for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "--- Summary ---")?;
         writeln!(f, "Total Requests: {}", self.total_requests)?;
         writeln!(f, "Total Time: {}ms", self.total_time_ms)?;
         writeln!(f, "Average Latency: {}ms", self.avg_latency_ms)?;
