@@ -1,11 +1,20 @@
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use reqwest::Method;
 use std::path::PathBuf;
 
 /// A curl-like tool for interacting with LLMs
 #[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None, term_width = 160)]
-pub(crate) struct Args {
+#[command(group(
+    ArgGroup::new("body_group")
+        .args(["data", "data_raw", "data_urlencode"]),
+))]
+#[command(group(
+    ArgGroup::new("form_group")
+        .args(["form", "form_string"])
+        .conflicts_with("body_group"),
+))]
+pub struct Args {
     /// Concurrent clients
     #[arg(short, long, default_value_t = 1)]
     pub(crate) clients: u32,
@@ -27,7 +36,7 @@ pub(crate) struct Args {
     pub(crate) data_urlencode: Option<String>,
 
     /// dataset directory
-    #[arg(long, value_name = "DIRECTORY")]
+    #[arg(long, value_name = "DIRECTORY", conflicts_with_all = ["body_group", "form_group"])]
     pub(crate) dataset: Option<PathBuf>,
 
     /// Delay in millis for initial requests (e.g. 10 or rand(100, 200))
@@ -62,21 +71,13 @@ pub(crate) struct Args {
     #[arg(short, long)]
     pub(crate) include: bool,
 
-    /// Json query expression for token output
+    /// Predefine schema (gemini/openai/anthropic/TGI) or custom jq expression for token output
     #[arg(short, long, value_name = "EXPRESSION")]
     pub(crate) jq: Option<String>,
 
-    /// Save the output json to a file
-    #[arg(long, value_name = "JSON_PATH")]
-    pub(crate) json_path: Option<String>,
-
-    /// Write to FILE instead of stdout
-    #[arg(short = 'o', long, value_name = "FILE")]
+    /// Write to response to output directory
+    #[arg(short = 'o', long, value_name = "DIRECTORY")]
     pub(crate) output: Option<String>,
-
-    /// print out json format
-    #[arg(short = 'P', long)]
-    pub(crate) json_output: bool,
 
     /// Number of requests to perform
     #[arg(short = 'N', long, default_value_t = 1)]
@@ -87,20 +88,12 @@ pub(crate) struct Args {
     pub(crate) seed: Option<i32>,
 
     /// Silent mode
-    #[arg(long)]
+    #[arg(short, long)]
     pub(crate) silent: bool,
 
     /// Output token per seconds
     #[arg(short, long)]
     pub(crate) tokens: bool,
-
-    /// Tokenizer name for token counting
-    #[arg(long, value_name = "TOKENIZER_NAME")]
-    pub(crate) tokenizer: Option<String>,
-
-    /// Make the operation more talkative
-    #[arg(short, long)]
-    pub(crate) verbose: bool,
 
     /// Specify request HTTP method to use
     #[arg(short = 'X', long, value_name = "METHOD")]
@@ -129,5 +122,39 @@ impl Args {
             return Method::POST;
         }
         Method::GET
+    }
+
+    pub(crate) fn get_jq(&self, stream: bool) -> String {
+        match self.jq.as_deref() {
+            Some("gemini") => {
+                if self.url.contains("streamGenerateContent") {
+                    "$[*].candidates[*].content.parts[*].text".to_string()
+                } else {
+                    "$.candidates[*].content.parts[*].text".to_string()
+                }
+            }
+            Some("openai") => {
+                if stream {
+                    "$.choices[*].delta.content".to_string()
+                } else {
+                    "$.choices[*].message.content".to_string()
+                }
+            }
+            Some("anthropic") => {
+                if stream {
+                    "$.delta.text".to_string()
+                } else {
+                    "$.content[*].text".to_string()
+                }
+            }
+            Some("TGI") | None => {
+                if stream {
+                    "$.token.text".to_string()
+                } else {
+                    "$.generated_text".to_string()
+                }
+            }
+            Some(expr) => expr.to_string(),
+        }
     }
 }
