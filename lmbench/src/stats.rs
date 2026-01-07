@@ -85,3 +85,81 @@ impl fmt::Display for Stats {
         writeln!(f, "{}", json)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_generate_stats() {
+        let latencies = vec![
+            Duration::from_millis(100),
+            Duration::from_millis(200),
+            Duration::from_millis(300),
+            Duration::from_millis(400),
+            Duration::from_millis(500),
+            Duration::from_millis(600),
+            Duration::from_millis(700),
+            Duration::from_millis(800),
+            Duration::from_millis(900),
+            Duration::from_millis(1000),
+        ];
+        let total_output_tokens = 1000;
+        let total_input_tokens = 500;
+        let error_requests = 2;
+
+        let stats = generate_stats(
+            &latencies,
+            total_output_tokens,
+            total_input_tokens,
+            error_requests,
+        );
+
+        assert_eq!(stats.success_requests, 10);
+        assert_eq!(stats.error_requests, 2);
+        assert_eq!(stats.total_time_ms, 5500);
+        assert_eq!(stats.avg_latency_ms, 550);
+        assert_eq!(stats.min_latency_ms, 100);
+        assert_eq!(stats.max_latency_ms, 1000);
+        assert_eq!(stats.p50_latency_ms, 600);
+        assert_eq!(stats.p90_latency_ms, 1000);
+        assert_eq!(stats.p99_latency_ms, 1000);
+        assert!((stats.tps - 1.8181).abs() < 0.0001);
+        assert!((stats.output_tokens_per_second - 181.8181).abs() < 0.0001);
+        assert!((stats.input_tokens_per_second - 90.9090).abs() < 0.0001);
+
+        let expected_json = serde_json::to_string_pretty(&stats).unwrap();
+        assert_eq!(stats.to_string(), format!("{}\n", expected_json));
+    }
+
+    #[test]
+    fn test_generate_stats_empty() {
+        let latencies = vec![];
+        let total_output_tokens = 0;
+        let total_input_tokens = 0;
+        let error_requests = 0;
+
+        let stats = generate_stats(
+            &latencies,
+            total_output_tokens,
+            total_input_tokens,
+            error_requests,
+        );
+
+        assert_eq!(stats.success_requests, 0);
+        assert_eq!(stats.error_requests, 0);
+        assert_eq!(stats.total_time_ms, 0);
+        assert_eq!(stats.avg_latency_ms, 0);
+        assert_eq!(stats.min_latency_ms, 0);
+        assert_eq!(stats.max_latency_ms, 0);
+        assert_eq!(stats.p50_latency_ms, 0);
+        assert_eq!(stats.p90_latency_ms, 0);
+        assert_eq!(stats.p99_latency_ms, 0);
+        assert_eq!(stats.tps, 0.0);
+        assert_eq!(stats.total_output_tokens, 0);
+        assert_eq!(stats.output_tokens_per_second, 0.0);
+        assert_eq!(stats.total_input_tokens, 0);
+        assert_eq!(stats.input_tokens_per_second, 0.0);
+    }
+}

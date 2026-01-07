@@ -158,3 +158,115 @@ impl Args {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::Method;
+
+    fn default_args() -> Args {
+        Args {
+            clients: 1,
+            connect_timeout: 60,
+            data: None,
+            data_raw: None,
+            data_urlencode: None,
+            dataset: None,
+            delay: None,
+            duration: None,
+            extra_parameters: None,
+            form: vec![],
+            form_string: vec![],
+            get: false,
+            header: vec![],
+            include: false,
+            jq: None,
+            output: None,
+            repeat: 1,
+            seed: None,
+            silent: false,
+            tokens: false,
+            request: None,
+            url: "http://localhost".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_get_method() {
+        let mut args = default_args();
+        assert_eq!(args.get_method(), Method::GET);
+
+        args.request = Some("POST".to_string());
+        assert_eq!(args.get_method(), Method::POST);
+
+        args.request = Some("PUT".to_string());
+        assert_eq!(args.get_method(), Method::PUT);
+
+        args.request = None;
+        args.get = true;
+        assert_eq!(args.get_method(), Method::GET);
+
+        args.get = false;
+        args.data = Some("data".to_string());
+        assert_eq!(args.get_method(), Method::POST);
+
+        args.data = None;
+        args.data_raw = Some("data_raw".to_string());
+        assert_eq!(args.get_method(), Method::POST);
+
+        args.data_raw = None;
+        args.data_urlencode = Some("data_urlencode".to_string());
+        assert_eq!(args.get_method(), Method::POST);
+
+        args.data_urlencode = None;
+        args.form = vec!["form".to_string()];
+        assert_eq!(args.get_method(), Method::POST);
+
+        args.form = vec![];
+        args.form_string = vec!["form_string".to_string()];
+        assert_eq!(args.get_method(), Method::POST);
+
+        args.form_string = vec![];
+        args.dataset = Some("dataset".into());
+        assert_eq!(args.get_method(), Method::POST);
+    }
+
+    #[test]
+    fn test_get_jq() {
+        let mut args = default_args();
+
+        // Test None case
+        assert_eq!(args.get_jq(true), "$.token.text");
+        assert_eq!(args.get_jq(false), "$.generated_text");
+
+        // Test gemini
+        args.jq = Some("gemini".to_string());
+        args.url = "http://host/streamGenerateContent".to_string();
+        assert_eq!(
+            args.get_jq(true),
+            "$[*].candidates[*].content.parts[*].text"
+        );
+        args.url = "http://host/generateContent".to_string();
+        assert_eq!(args.get_jq(false), "$.candidates[*].content.parts[*].text");
+
+        // Test openai
+        args.jq = Some("openai".to_string());
+        assert_eq!(args.get_jq(true), "$.choices[*].delta.content");
+        assert_eq!(args.get_jq(false), "$.choices[*].message.content");
+
+        // Test anthropic
+        args.jq = Some("anthropic".to_string());
+        assert_eq!(args.get_jq(true), "$.delta.text");
+        assert_eq!(args.get_jq(false), "$.content[*].text");
+
+        // Test TGI
+        args.jq = Some("TGI".to_string());
+        assert_eq!(args.get_jq(true), "$.token.text");
+        assert_eq!(args.get_jq(false), "$.generated_text");
+
+        // Test custom expression
+        args.jq = Some(".foo.bar".to_string());
+        assert_eq!(args.get_jq(true), ".foo.bar");
+        assert_eq!(args.get_jq(false), ".foo.bar");
+    }
+}

@@ -1,7 +1,6 @@
 use crate::args::Args;
 use anyhow::Ok;
 use lazy_static::lazy_static;
-use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use reqwest::{
     Client, Method, RequestBuilder,
@@ -14,9 +13,6 @@ use tokenizers::Tokenizer;
 lazy_static! {
     static ref TOKENIZER_CACHE: Mutex<HashMap<String, Tokenizer>> = Mutex::new(HashMap::new());
 }
-
-pub(crate) static TOKENIZER_NAME: Lazy<Option<String>> =
-    Lazy::new(|| std::env::var("TOKENIZER_NAME").ok());
 
 #[derive(Debug, Clone)]
 pub struct Record {
@@ -138,17 +134,162 @@ impl Record {
 }
 
 pub fn count_text_tokens(text: &str) -> usize {
-    if let Some(tokenizer_name) = TOKENIZER_NAME.as_ref() {
+    let tokenizer_name = std::env::var("TOKENIZER_NAME").ok();
+    if let Some(tokenizer_name) = tokenizer_name {
         let mut cache = TOKENIZER_CACHE.lock();
-        if !cache.contains_key(tokenizer_name) {
-            let tokenizer = Tokenizer::from_pretrained(tokenizer_name, None).unwrap();
+        if !cache.contains_key(&tokenizer_name) {
+            let tokenizer = Tokenizer::from_pretrained(&tokenizer_name, None).unwrap();
             cache.insert(tokenizer_name.clone(), tokenizer);
         }
-        let tokenizer = cache.get(tokenizer_name).unwrap();
+        let tokenizer = cache.get(&tokenizer_name).unwrap();
         let encoding = tokenizer.encode(text, false).unwrap();
         encoding.get_ids().len()
     } else {
         // Default to a simple word count if no tokenizer is specified
         text.split_whitespace().count()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::Method;
+    use reqwest::header::{HeaderMap, HeaderValue};
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[tokio::test]
+    async fn test_record_new_with_data_file() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let content = "hello from file";
+        temp_file.write_all(content.as_bytes()).unwrap();
+
+        let args = Args {
+            clients: 1,
+            connect_timeout: 60,
+            data: Some(format!("@{}", temp_file.path().to_str().unwrap())),
+            data_raw: None,
+            data_urlencode: None,
+            dataset: None,
+            delay: None,
+            duration: None,
+            extra_parameters: None,
+            form: vec![],
+            form_string: vec![],
+            get: false,
+            header: vec![],
+            include: false,
+            jq: None,
+            output: None,
+            repeat: 1,
+            seed: None,
+            silent: false,
+            tokens: false,
+            request: None,
+            url: "http://localhost".to_string(),
+        };
+
+        let record = Record::new(&args).await.unwrap();
+        assert_eq!(record.body, Some(content.to_string()));
+    }
+
+    #[test]
+    fn test_count_text_tokens() {
+        // Test with default word count
+        assert_eq!(count_text_tokens("hello world"), 2);
+        assert_eq!(count_text_tokens("hello   world"), 2);
+        assert_eq!(count_text_tokens(""), 0);
+
+        unsafe {
+            std::env::set_var("TOKENIZER_NAME", "gpt2");
+            assert_eq!(count_text_tokens("hello world"), 2);
+            std::env::remove_var("TOKENIZER_NAME");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_into_request_builder_with_body() {
+        let record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost/test".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: Some("test body".to_string()),
+            input_tokens: 0,
+        };
+
+        let client = Client::new();
+        let request = record.into_request_builder(&client).build().unwrap();
+
+        assert_eq!(*request.method(), Method::POST);
+        assert_eq!(request.url().as_str(), "http://localhost/test");
+
+        let body_bytes = request.body().unwrap().as_bytes().unwrap();
+        assert_eq!(body_bytes, "test body".as_bytes());
+    }
+
+    #[test]
+    fn test_set_extra_parameters() {
+        let mut record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: Some(json!({"prompt": "hello"}).to_string()),
+            input_tokens: 0,
+        };
+        record.headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+
+        let extra_parameters = Some(json!({ "temperature": 0.5 }).to_string());
+        record.set_extra_parameters(&extra_parameters).unwrap();
+
+        let expected_body = json!({
+            "prompt": "hello",
+            "temperature": 0.5
+        });
+        assert_eq!(record.body, Some(expected_body.to_string()));
+
+        // Test with no extra parameters
+        let mut record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: Some(json!({ "prompt": "hello" }).to_string()),
+            input_tokens: 0,
+        };
+        record.headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let extra_parameters = None;
+        record.set_extra_parameters(&extra_parameters).unwrap();
+        assert_eq!(record.body, Some(json!({ "prompt": "hello" }).to_string()));
+
+        // Test with non-json body
+        let mut record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: Some("hello".to_string()),
+            input_tokens: 0,
+        };
+        record.headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let extra_parameters = Some(json!({ "temperature": 0.5 }).to_string());
+        assert!(record.set_extra_parameters(&extra_parameters).is_err());
     }
 }

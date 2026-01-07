@@ -341,3 +341,94 @@ async fn writer_thread(mut rx: mpsc::Receiver<(String, String)>, output_dir: Str
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::args::Args;
+    use reqwest::header::{HeaderMap, HeaderValue};
+    use serde_json::json;
+
+    fn default_args() -> Args {
+        Args {
+            clients: 1,
+            connect_timeout: 60,
+            data: None,
+            data_raw: None,
+            data_urlencode: None,
+            dataset: None,
+            delay: None,
+            duration: None,
+            extra_parameters: None,
+            form: vec![],
+            form_string: vec![],
+            get: false,
+            header: vec![],
+            include: false,
+            jq: None,
+            output: None,
+            repeat: 1,
+            seed: None,
+            silent: false,
+            tokens: false,
+            request: None,
+            url: "http://localhost".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_get_delay() {
+        assert_eq!(
+            get_delay(&Some("100".to_string())),
+            Some(Duration::from_millis(100))
+        );
+
+        let delay = get_delay(&Some("rand(100)".to_string()));
+        assert!(delay.is_some());
+        let millis = delay.unwrap().as_millis();
+        assert!(millis < 100);
+
+        let delay = get_delay(&Some("rand(100, 200)".to_string()));
+        assert!(delay.is_some());
+        let millis = delay.unwrap().as_millis();
+        assert!(millis >= 100 && millis < 200);
+
+        assert_eq!(
+            get_delay(&Some("invalid".to_string())),
+            Some(Duration::from_millis(0))
+        );
+        assert_eq!(get_delay(&None), None);
+    }
+
+    #[test]
+    fn test_apply_jq() {
+        let json = json!([{"foo": "bar"}, {"foo": "baz"}]);
+        assert_eq!(apply_jq(&json, "$[*].foo", false), "barbaz");
+
+        let json = json!({"bar": "baz"});
+        assert_eq!(apply_jq(&json, "$.foo", false), "");
+    }
+
+    #[test]
+    fn test_get_text_response() {
+        let args = default_args();
+        let mut headers = HeaderMap::new();
+
+        // Test with plain text
+        let body = "hello world";
+        assert_eq!(get_text_response(&args, &headers, body), "hello world");
+
+        // Test with application/json
+        headers.insert("content-type", HeaderValue::from_static("application/json"));
+        let body = "{\"foo\": \"bar\"}";
+        assert_eq!(get_text_response(&args, &headers, body), "");
+
+        // Test with text/event-stream
+        headers.insert(
+            "content-type",
+            HeaderValue::from_static("text/event-stream"),
+        );
+        let body = "data: {\"foo\": \"bar\"}\n\ndata: {\"foo\": \"baz\"}\n\ndata: [DONE]\n";
+        assert_eq!(get_text_response(&args, &headers, body), "");
+    }
+}
