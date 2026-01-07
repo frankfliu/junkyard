@@ -1,6 +1,6 @@
 pub mod args;
 pub(crate) mod record;
-pub(crate) mod stats;
+pub mod stats;
 
 use args::Args;
 
@@ -11,7 +11,7 @@ use rand::Rng;
 use record::{Record, count_text_tokens};
 use reqwest::Client;
 
-use stats::generate_stats;
+use stats::{Stats, generate_stats};
 
 use serde_json::{Value, from_str};
 use std::collections::HashSet;
@@ -24,7 +24,7 @@ use tokio::task::JoinHandle;
 
 type JobResult = Result<(Vec<Duration>, usize, usize, usize), anyhow::Error>;
 
-pub async fn run(cli: Args) -> Result<(), anyhow::Error> {
+pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     let (tx, rx) = mpsc::channel::<(String, String)>(1024);
 
     let writer_handle = if let Some(output_dir) = cli.output.clone() {
@@ -142,7 +142,7 @@ pub async fn run(cli: Args) -> Result<(), anyhow::Error> {
         println!("{}", stats);
     }
 
-    Ok(())
+    Ok(stats)
 }
 
 async fn process_single_record(
@@ -164,7 +164,7 @@ async fn process_single_record(
     let headers = res.headers().clone();
     let status = res.status();
 
-    if total_requests == 1 {
+    if cli.include && total_requests == 1 {
         println!("Status: {}", status);
         println!("Headers:\n{:#?}", headers);
         println!("Body:");
@@ -175,10 +175,13 @@ async fn process_single_record(
 
     while let Some(item) = stream.next().await {
         let chunk = item?;
-        if !cli.silent && total_requests == 1 {
+        if total_requests == 1 {
             print!("{}", String::from_utf8_lossy(&chunk));
         }
         body_bytes.extend_from_slice(&chunk);
+    }
+    if total_requests == 1 {
+        println!();
     }
     let body_text = String::from_utf8(body_bytes)?;
 

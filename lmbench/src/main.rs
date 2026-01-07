@@ -5,5 +5,6 @@ use lmbench::run;
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let cli = Args::parse();
-    run(cli).await
+    let _ = run(cli).await?;
+    Ok(())
 }
