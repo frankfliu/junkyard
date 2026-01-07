@@ -47,12 +47,12 @@ impl Record {
             }
         } else if let Some(data) = &cli.data_raw {
             Some(data.clone())
-        } else if let Some(data) = &cli.data_urlencode {
+        } else if let Some(data) = &cli.data_urlencoded {
             headers.insert(
                 reqwest::header::CONTENT_TYPE,
                 HeaderValue::from_static("application/x-www-form-urlencoded"),
             );
-            serde_urlencoded::to_string(data).ok()
+            Some(data.clone())
         } else {
             None
         };
@@ -154,10 +154,11 @@ pub fn count_text_tokens(text: &str) -> usize {
 mod tests {
     use super::*;
     use reqwest::Method;
-    use reqwest::header::{HeaderMap, HeaderValue};
+    use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
     use serde_json::json;
     use std::collections::HashMap;
 
+    use clap::Parser;
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -166,34 +167,76 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         let content = "hello from file";
         temp_file.write_all(content.as_bytes()).unwrap();
-
-        let args = Args {
-            clients: 1,
-            connect_timeout: 60,
-            data: Some(format!("@{}", temp_file.path().to_str().unwrap())),
-            data_raw: None,
-            data_urlencode: None,
-            dataset: None,
-            delay: None,
-            duration: None,
-            extra_parameters: None,
-            form: vec![],
-            form_string: vec![],
-            get: false,
-            header: vec![],
-            include: false,
-            jq: None,
-            output: None,
-            repeat: 1,
-            seed: None,
-            silent: false,
-            tokens: false,
-            request: None,
-            url: "http://localhost".to_string(),
-        };
+        let args = Args::parse_from([
+            "lmbench",
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: text/plain",
+            "-d",
+            format!("@{}", temp_file.path().to_str().unwrap()).as_str(),
+            "https://localhost/generate",
+        ]);
 
         let record = Record::new(&args).await.unwrap();
         assert_eq!(record.body, Some(content.to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_record_new_with_data_raw() {
+        let args = Args::parse_from([
+            "lmbench",
+            "--data-raw",
+            "hello",
+            "https://localhost/generate",
+        ]);
+
+        let record = Record::new(&args).await.unwrap();
+        assert_eq!(record.body, Some("hello".to_string()));
+        assert_eq!(record.method, Method::POST);
+    }
+
+    #[tokio::test]
+    async fn test_record_new_with_data_urlencoded() {
+        let args = Args::parse_from([
+            "lmbench",
+            "-H",
+            "Content-Type: text/plain",
+            "--data-urlencoded",
+            "hello",
+            "https://localhost/generate",
+        ]);
+
+        let record = Record::new(&args).await.unwrap();
+        assert_eq!(record.body, Some("hello".to_string()));
+        assert_eq!(record.method, Method::POST);
+        assert_eq!(
+            record.headers.get(CONTENT_TYPE).unwrap(),
+            HeaderValue::from_static("application/x-www-form-urlencoded")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_record_new_with_form() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let content = "hello from file";
+        temp_file.write_all(content.as_bytes()).unwrap();
+
+        let args = Args::parse_from([
+            "lmbench",
+            "-F",
+            format!("key1=@{}", temp_file.path().to_str().unwrap()).as_str(),
+            "-F",
+            "key2=value",
+            "--form-string",
+            "key3=value",
+            "https://localhost/generate",
+        ]);
+
+        let record = Record::new(&args).await.unwrap();
+        assert_eq!(record.form.get("key1"), Some(&content.to_string()));
+        assert_eq!(record.form.get("key2"), Some(&"value".to_string()));
+        assert_eq!(record.form.get("key3"), Some(&"value".to_string()));
     }
 
     #[test]
@@ -230,6 +273,30 @@ mod tests {
 
         let body_bytes = request.body().unwrap().as_bytes().unwrap();
         assert_eq!(body_bytes, "test body".as_bytes());
+    }
+
+    #[tokio::test]
+    async fn test_into_request_builder_with_form() {
+        let mut form = HashMap::new();
+        form.insert("key".to_string(), "value".to_string());
+        let record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost/test".to_string(),
+            headers: HeaderMap::new(),
+            form,
+            body: None,
+            input_tokens: 0,
+        };
+
+        let client = Client::new();
+        let request = record.into_request_builder(&client).build().unwrap();
+
+        assert_eq!(*request.method(), Method::POST);
+        assert_eq!(request.url().as_str(), "http://localhost/test");
+
+        let body_bytes = request.body().unwrap().as_bytes().unwrap();
+        assert_eq!(body_bytes, "key=value".as_bytes());
     }
 
     #[test]

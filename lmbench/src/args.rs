@@ -7,12 +7,13 @@ use std::path::PathBuf;
 #[command(version, about, long_about = None, term_width = 160)]
 #[command(group(
     ArgGroup::new("body_group")
-        .args(["data", "data_raw", "data_urlencode"]),
+        .args(["data", "data_raw", "data_urlencoded"]),
 ))]
 #[command(group(
     ArgGroup::new("form_group")
         .args(["form", "form_string"])
-        .conflicts_with("body_group"),
+        .conflicts_with("body_group")
+        .multiple(true),
 ))]
 pub struct Args {
     /// Concurrent clients
@@ -33,7 +34,7 @@ pub struct Args {
 
     /// HTTP POST data url encoded
     #[arg(long, value_name = "DATA")]
-    pub(crate) data_urlencode: Option<String>,
+    pub(crate) data_urlencoded: Option<String>,
 
     /// dataset directory
     #[arg(long, value_name = "DIRECTORY", conflicts_with_all = ["body_group", "form_group"])]
@@ -114,7 +115,7 @@ impl Args {
         }
         if self.data.is_some()
             || self.data_raw.is_some()
-            || self.data_urlencode.is_some()
+            || self.data_urlencoded.is_some()
             || !self.form.is_empty()
             || !self.form_string.is_empty()
             || self.dataset.is_some()
@@ -165,30 +166,7 @@ mod tests {
     use reqwest::Method;
 
     fn default_args() -> Args {
-        Args {
-            clients: 1,
-            connect_timeout: 60,
-            data: None,
-            data_raw: None,
-            data_urlencode: None,
-            dataset: None,
-            delay: None,
-            duration: None,
-            extra_parameters: None,
-            form: vec![],
-            form_string: vec![],
-            get: false,
-            header: vec![],
-            include: false,
-            jq: None,
-            output: None,
-            repeat: 1,
-            seed: None,
-            silent: false,
-            tokens: false,
-            request: None,
-            url: "http://localhost".to_string(),
-        }
+        Args::parse_from(["lmbench", "https://localhost/generate"])
     }
 
     #[test]
@@ -215,10 +193,10 @@ mod tests {
         assert_eq!(args.get_method(), Method::POST);
 
         args.data_raw = None;
-        args.data_urlencode = Some("data_urlencode".to_string());
+        args.data_urlencoded = Some("data_urlencoded".to_string());
         assert_eq!(args.get_method(), Method::POST);
 
-        args.data_urlencode = None;
+        args.data_urlencoded = None;
         args.form = vec!["form".to_string()];
         assert_eq!(args.get_method(), Method::POST);
 
@@ -241,12 +219,12 @@ mod tests {
 
         // Test gemini
         args.jq = Some("gemini".to_string());
-        args.url = "http://host/streamGenerateContent".to_string();
+        args.url = "https://host/streamGenerateContent".to_string();
         assert_eq!(
             args.get_jq(true),
             "$[*].candidates[*].content.parts[*].text"
         );
-        args.url = "http://host/generateContent".to_string();
+        args.url = "https://host/generateContent".to_string();
         assert_eq!(args.get_jq(false), "$.candidates[*].content.parts[*].text");
 
         // Test openai

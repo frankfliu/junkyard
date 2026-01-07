@@ -358,7 +358,7 @@ mod tests {
             connect_timeout: 60,
             data: None,
             data_raw: None,
-            data_urlencode: None,
+            data_urlencoded: None,
             dataset: None,
             delay: None,
             duration: None,
@@ -375,7 +375,7 @@ mod tests {
             silent: false,
             tokens: false,
             request: None,
-            url: "http://localhost".to_string(),
+            url: "https://localhost".to_string(),
         }
     }
 
