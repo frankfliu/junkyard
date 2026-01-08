@@ -230,9 +230,11 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
     let path = Path::new(path);
     let mut data: Vec<(String, String)> = Vec::new();
     if path.is_dir() {
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            let path = entry.path();
+        let mut entries: Vec<_> = fs::read_dir(path)?
+            .map(|res| res.map(|e| e.path()))
+            .collect::<Result<Vec<_>, _>>()?;
+        entries.sort();
+        for path in entries {
             if path.is_file() {
                 let content = fs::read_to_string(&path)?;
                 data.push((
@@ -351,6 +353,7 @@ mod tests {
     use crate::args::Args;
     use reqwest::header::{HeaderMap, HeaderValue};
     use serde_json::json;
+    use tempfile;
 
     fn default_args() -> Args {
         Args {
@@ -433,5 +436,34 @@ mod tests {
         );
         let body = "data: {\"foo\": \"bar\"}\n\ndata: {\"foo\": \"baz\"}\n\ndata: [DONE]\n";
         assert_eq!(get_text_response(&args, &headers, body), "");
+    }
+
+    #[tokio::test]
+    async fn test_load_dataset_from_file() {
+        let mut args = default_args();
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap().to_string();
+        std::fs::write(&path, "line 1\nline 2").unwrap();
+        args.dataset = Some(path.into());
+        let records = load_dataset(&args).await.unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].body, Some("line 1".to_string()));
+        assert_eq!(records[1].body, Some("line 2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_load_dataset_from_directory() {
+        let mut args = default_args();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_str().unwrap().to_string();
+        std::fs::write(dir.path().join("b.txt"), "content 2").unwrap();
+        std::fs::write(dir.path().join("a.txt"), "content 1").unwrap();
+        args.dataset = Some(path.into());
+        let records = load_dataset(&args).await.unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].id, "a");
+        assert_eq!(records[0].body, Some("content 1".to_string()));
+        assert_eq!(records[1].id, "b");
+        assert_eq!(records[1].body, Some("content 2".to_string()));
     }
 }
