@@ -8,6 +8,7 @@ anyhow = "1.0"
 clap = { version = "4.5.53", features = ["derive"] }
 futures-util = "0.3.30"
 indicatif = { version = "0.17.8", features = ["tokio"] }
+indoc = "2.0.7"
 jsonpath_lib = "0.3.0"
 lazy_static = "1.4.0"
 parking_lot = "0.12"
