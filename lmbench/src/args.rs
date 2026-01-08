@@ -84,10 +84,6 @@ pub struct Args {
     #[arg(short = 'N', long, default_value_t = 1)]
     pub(crate) repeat: u32,
 
-    /// Random seed
-    #[arg(long, value_name = "RANDOM_SEED")]
-    pub(crate) seed: Option<i32>,
-
     /// Silent mode
     #[arg(short, long)]
     pub(crate) silent: bool,

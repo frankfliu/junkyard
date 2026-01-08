@@ -264,20 +264,23 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
 
 fn get_delay(delay: &Option<String>) -> Option<Duration> {
     delay.as_ref().map(|d| {
-        if d.starts_with("rand(") {
+        if d.starts_with("rand(") && d.ends_with(")") {
             let parts: Vec<&str> = d[5..d.len() - 1].split(',').map(|s| s.trim()).collect();
             if parts.len() == 1 {
-                let max = parts[0].parse().unwrap_or(0);
-                Duration::from_millis(rand::rng().random_range(0..max))
+                let max = parts[0].parse::<u64>().unwrap_or(0);
+                Duration::from_millis(rand::rng().random_range(0..=max))
             } else if parts.len() == 2 {
-                let min = parts[0].parse().unwrap_or(0);
-                let max = parts[1].parse().unwrap_or(0);
-                Duration::from_millis(rand::rng().random_range(min..max))
+                let min = parts[0].parse::<u64>().unwrap_or(0);
+                let max = parts[1].parse::<u64>().unwrap_or(0);
+                if min > max {
+                    return Duration::from_millis(0);
+                }
+                Duration::from_millis(rand::rng().random_range(min..=max))
             } else {
                 Duration::from_millis(0)
             }
         } else {
-            Duration::from_millis(d.parse().unwrap_or(0))
+            Duration::from_millis(d.parse::<u64>().unwrap_or(0))
         }
     })
 }
@@ -334,16 +337,10 @@ async fn writer_thread(mut rx: mpsc::Receiver<(String, String)>, output_dir: Str
             options.write(true).truncate(true);
             seen_ids.insert(id);
         }
-        let mut file = match options.open(&path).await {
-            Ok(file) => file,
-            Err(e) => {
-                eprintln!("failed to open file: {}: {}", path.display(), e);
-                continue;
-            }
-        };
-        if let Err(e) = file.write_all(format!("{}\n", body_text).as_bytes()).await {
-            eprintln!("failed to write to file: {}: {}", path.display(), e);
-        }
+        let mut file = options.open(&path).await.unwrap();
+        file.write_all(format!("{}\n", body_text).as_bytes())
+            .await
+            .unwrap()
     }
 }
 
@@ -351,35 +348,13 @@ async fn writer_thread(mut rx: mpsc::Receiver<(String, String)>, output_dir: Str
 mod tests {
     use super::*;
     use crate::args::Args;
+    use clap::Parser;
     use reqwest::header::{HeaderMap, HeaderValue};
     use serde_json::json;
     use tempfile;
 
     fn default_args() -> Args {
-        Args {
-            clients: 1,
-            connect_timeout: 60,
-            data: None,
-            data_raw: None,
-            data_urlencoded: None,
-            dataset: None,
-            delay: None,
-            duration: None,
-            extra_parameters: None,
-            form: vec![],
-            form_string: vec![],
-            get: false,
-            header: vec![],
-            include: false,
-            jq: None,
-            output: None,
-            repeat: 1,
-            seed: None,
-            silent: false,
-            tokens: false,
-            request: None,
-            url: "https://localhost".to_string(),
-        }
+        Args::parse_from(["lmbench", "https://localhost"])
     }
 
     #[test]
@@ -392,18 +367,33 @@ mod tests {
         let delay = get_delay(&Some("rand(100)".to_string()));
         assert!(delay.is_some());
         let millis = delay.unwrap().as_millis();
-        assert!(millis < 100);
+        assert!(millis <= 100);
 
         let delay = get_delay(&Some("rand(100, 200)".to_string()));
         assert!(delay.is_some());
         let millis = delay.unwrap().as_millis();
-        assert!(millis >= 100 && millis < 200);
+        assert!(millis >= 100 && millis <= 200);
+
+        assert_eq!(
+            get_delay(&Some("rand()".to_string())),
+            Some(Duration::from_millis(0))
+        );
 
         assert_eq!(
             get_delay(&Some("invalid".to_string())),
             Some(Duration::from_millis(0))
         );
         assert_eq!(get_delay(&None), None);
+
+        assert_eq!(
+            get_delay(&Some("-100".to_string())),
+            Some(Duration::from_millis(0))
+        );
+
+        assert_eq!(
+            get_delay(&Some("rand(200, 100)".to_string())),
+            Some(Duration::from_millis(0))
+        );
     }
 
     #[test]
@@ -465,5 +455,22 @@ mod tests {
         assert_eq!(records[0].body, Some("content 1".to_string()));
         assert_eq!(records[1].id, "b");
         assert_eq!(records[1].body, Some("content 2".to_string()));
+    }
+
+    #[test]
+    #[should_panic(expected = "Failed to parse json body: invalid json")]
+    fn test_get_text_response_panic_with_invalid_json() {
+        let args = default_args();
+        let mut headers = HeaderMap::new();
+        headers.insert("content-type", HeaderValue::from_static("application/json"));
+        let body = "invalid json";
+        get_text_response(&args, &headers, body);
+    }
+
+    #[test]
+    #[should_panic(expected = "Failed to apply jq: invalid jq expression")]
+    fn test_apply_jq_panic_with_invalid_expression() {
+        let json = json!({"foo": "bar"});
+        apply_jq(&json, "invalid jq expression", false);
     }
 }

@@ -173,6 +173,8 @@ mod tests {
             "POST",
             "-H",
             "Content-Type: text/plain",
+            "-H",
+            "Invalid-Header",
             "-d",
             format!("@{}", temp_file.path().to_str().unwrap()).as_str(),
             "https://localhost/generate",
@@ -273,6 +275,18 @@ mod tests {
 
         let body_bytes = request.body().unwrap().as_bytes().unwrap();
         assert_eq!(body_bytes, "test body".as_bytes());
+
+        let record = Record {
+            id: "test".to_string(),
+            method: Method::GET,
+            url: "http://localhost/test".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: None,
+            input_tokens: 0,
+        };
+        let request = record.into_request_builder(&client).build().unwrap();
+        assert!(request.body().is_none());
     }
 
     #[tokio::test]
@@ -358,5 +372,73 @@ mod tests {
         );
         let extra_parameters = Some(json!({ "temperature": 0.5 }).to_string());
         assert!(record.set_extra_parameters(&extra_parameters).is_err());
+
+        // Test with json array body
+        let mut record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: Some(json!([1, 2, 3]).to_string()),
+            input_tokens: 0,
+        };
+        record.headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let extra_parameters = Some(json!({ "temperature": 0.5 }).to_string());
+        record.set_extra_parameters(&extra_parameters).unwrap();
+        assert_eq!(record.body, Some(json!([1, 2, 3]).to_string()));
+
+        // Test with empty body
+        let mut record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: None,
+            input_tokens: 0,
+        };
+        record.headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let extra_parameters = Some(json!({ "temperature": 0.5 }).to_string());
+        record.set_extra_parameters(&extra_parameters).unwrap();
+        assert_eq!(record.body, None);
+
+        // Test with text/plain content type
+        let mut record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: Some(json!({"prompt": "hello"}).to_string()),
+            input_tokens: 0,
+        };
+        record.headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("text/plain"),
+        );
+        let extra_parameters = Some(json!({ "temperature": 0.5 }).to_string());
+        record.set_extra_parameters(&extra_parameters).unwrap();
+        assert_eq!(record.body, Some(json!({"prompt": "hello"}).to_string()));
+    }
+
+    #[test]
+    fn test_count_input_tokens() {
+        let record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: None,
+            input_tokens: 0,
+        };
+        assert_eq!(record.count_input_tokens(), 0);
     }
 }
