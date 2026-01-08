@@ -3,6 +3,77 @@ use httpmock::prelude::*;
 use indoc::indoc;
 use lmbench::args::Args;
 use lmbench::run;
+use tempfile::tempdir;
+
+#[tokio::test]
+async fn test_run_with_output() {
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(POST).path("/test");
+        then.status(200).body("world");
+    });
+
+    let dir = tempdir().unwrap();
+    let output_path = dir.path().to_str().unwrap();
+
+    let args = Args::parse_from([
+        "lmbench",
+        "-d",
+        "hello",
+        "--repeat",
+        "2",
+        "-c",
+        "2",
+        "--output",
+        output_path,
+        &server.url("/test"),
+    ]);
+
+    let stats = run(args).await.unwrap();
+
+    assert_eq!(mock.hits(), 4);
+    assert_eq!(stats.success_requests, 4);
+
+    let content = std::fs::read_to_string(dir.path().join("data.jsonlines")).unwrap();
+    assert_eq!(content.lines().count(), 4);
+    assert!(content.contains(r#""response":"world"#));
+
+    // with count token
+    let args = Args::parse_from([
+        "lmbench",
+        "-d",
+        "hello",
+        "--tokens",
+        "--output",
+        output_path,
+        &server.url("/test"),
+    ]);
+
+    let stats = run(args).await.unwrap();
+    assert_eq!(stats.success_requests, 1);
+
+    let content = std::fs::read_to_string(dir.path().join("data.jsonlines")).unwrap();
+    assert!(content.contains(r#""generated_text":"world""#));
+    assert!(content.contains(r#""token_count":1"#));
+
+    let args = Args::parse_from([
+        "lmbench",
+        "-d",
+        "data",
+        "-v",
+        "--tokens",
+        "--output",
+        output_path,
+        &server.url("/test"),
+    ]);
+
+    let stats = run(args).await.unwrap();
+    assert_eq!(stats.success_requests, 1);
+
+    let content = std::fs::read_to_string(dir.path().join("data.jsonlines")).unwrap();
+    assert!(content.contains("headers"));
+    assert!(content.contains(r#""token_count":1"#));
+}
 
 #[tokio::test]
 async fn test_run_with_mock_server() {
@@ -14,7 +85,7 @@ async fn test_run_with_mock_server() {
             .body("world");
     });
 
-    let args = Args::parse_from(["lmbench", "-d", "hello", "-i", &server.url("/test")]);
+    let args = Args::parse_from(["lmbench", "-d", "hello", "-v", &server.url("/test")]);
 
     let stats = run(args).await.unwrap();
 
@@ -353,4 +424,49 @@ async fn test_run_with_custom_jq() {
 
     assert_eq!(stats.success_requests, 1);
     assert_eq!(stats.total_output_tokens, 2);
+}
+
+#[tokio::test]
+async fn test_run_with_delay_and_duration() {
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(POST).path("/test");
+        then.status(200).body("world");
+    });
+
+    let args = Args::parse_from([
+        "lmbench",
+        "-d",
+        "hello",
+        "--delay",
+        "900",
+        "--duration",
+        "1",
+        "--connect-timeout",
+        "5",
+        "-N",
+        "1000",
+        &server.url("/test"),
+    ]);
+
+    let stats = run(args).await.unwrap();
+
+    assert!(mock.hits() < 1000);
+    assert!(stats.success_requests < 1000);
+}
+
+#[tokio::test]
+async fn test_run_with_mismatch_url() {
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(POST).path("/test");
+        then.status(200).body("world");
+    });
+
+    let args = Args::parse_from(["lmbench", "-d", "hello", &server.url("/mismatch")]);
+
+    let stats = run(args).await.unwrap();
+    assert_eq!(mock.hits(), 0);
+    assert_eq!(stats.success_requests, 0);
+    assert_eq!(stats.error_requests, 1);
 }

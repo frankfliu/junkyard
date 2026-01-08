@@ -16,7 +16,7 @@ async fn test_main_with_mock_server() {
     cmd.arg(server.url("/test"))
         .arg("-d")
         .arg("hello")
-        .arg("-i");
+        .arg("-v");
 
     cmd.assert().success().stdout(contains("Status: 200 OK"));
 

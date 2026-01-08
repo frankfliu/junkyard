@@ -10,7 +10,6 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rand::Rng;
 use record::{Record, count_text_tokens};
 use reqwest::Client;
-
 use stats::{Stats, generate_stats};
 
 use serde_json::{Value, from_str};
@@ -138,7 +137,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         all_input_tokens,
         all_errors,
     );
-    if total_requests > 1 {
+    if cli.verbose || total_requests > 1 {
         println!("{}", stats);
     }
 
@@ -164,7 +163,7 @@ async fn process_single_record(
     let headers = res.headers().clone();
     let status = res.status();
 
-    if cli.include && total_requests == 1 {
+    if cli.verbose && total_requests == 1 {
         println!("Status: {}", status);
         println!("Headers:\n{:#?}", headers);
         println!("Body:");
@@ -190,9 +189,10 @@ async fn process_single_record(
     let mut output_tokens = 0;
     if cli.tokens {
         let text_response = get_text_response(&cli, &headers, &body_text);
-        output_tokens += count_text_tokens(&text_response);
+        let token_count = count_text_tokens(&text_response);
+        output_tokens += token_count;
         if cli.output.is_some() {
-            let json = if cli.include {
+            let json = if cli.verbose {
                 let mut serializable_headers = std::collections::HashMap::new();
                 for (key, value) in headers.iter() {
                     serializable_headers
@@ -200,20 +200,26 @@ async fn process_single_record(
                 }
                 serde_json::json!({
                     "duration": duration.as_millis(),
+                    "token_count": token_count,
                     "response": body_text,
                     "headers": serializable_headers,
                 })
             } else {
                 serde_json::json!({
                     "duration": duration.as_millis(),
-                    "response": text_response,
+                    "token_count": token_count,
+                    "generated_text": text_response,
                 })
             };
             tx.send((record.id.clone(), json.to_string())).await?;
         }
     } else {
         if cli.output.is_some() {
-            tx.send((record.id.clone(), body_text.clone())).await?;
+            let json = serde_json::json!({
+                "duration": duration.as_millis(),
+                "response": body_text,
+            });
+            tx.send((record.id.clone(), json.to_string())).await?;
         }
     }
 
@@ -375,7 +381,7 @@ mod tests {
         assert!(millis >= 100 && millis <= 200);
 
         assert_eq!(
-            get_delay(&Some("rand()".to_string())),
+            get_delay(&Some("rand(1,2,3)".to_string())),
             Some(Duration::from_millis(0))
         );
 
@@ -433,7 +439,7 @@ mod tests {
         let mut args = default_args();
         let file = tempfile::NamedTempFile::new().unwrap();
         let path = file.path().to_str().unwrap().to_string();
-        std::fs::write(&path, "line 1\nline 2").unwrap();
+        fs::write(&path, "line 1\nline 2").unwrap();
         args.dataset = Some(path.into());
         let records = load_dataset(&args).await.unwrap();
         assert_eq!(records.len(), 2);
@@ -445,9 +451,10 @@ mod tests {
     async fn test_load_dataset_from_directory() {
         let mut args = default_args();
         let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join("dummy")).unwrap();
         let path = dir.path().to_str().unwrap().to_string();
-        std::fs::write(dir.path().join("b.txt"), "content 2").unwrap();
-        std::fs::write(dir.path().join("a.txt"), "content 1").unwrap();
+        fs::write(dir.path().join("b.txt"), "content 2").unwrap();
+        fs::write(dir.path().join("a.txt"), "content 1").unwrap();
         args.dataset = Some(path.into());
         let records = load_dataset(&args).await.unwrap();
         assert_eq!(records.len(), 2);

@@ -68,10 +68,6 @@ pub struct Args {
     #[arg(short = 'H', long, value_name = "LINE")]
     pub(crate) header: Vec<String>,
 
-    /// Include protocol headers in the output
-    #[arg(short, long)]
-    pub(crate) include: bool,
-
     /// Predefine schema (gemini/openai/anthropic/TGI) or custom jq expression for token output
     #[arg(short, long, value_name = "EXPRESSION")]
     pub(crate) jq: Option<String>,
@@ -91,6 +87,10 @@ pub struct Args {
     /// Output token per seconds
     #[arg(short, long)]
     pub(crate) tokens: bool,
+
+    /// Make the operation more talkative
+    #[arg(short, long)]
+    pub(crate) verbose: bool,
 
     /// Specify request HTTP method to use
     #[arg(short = 'X', long, value_name = "METHOD")]
