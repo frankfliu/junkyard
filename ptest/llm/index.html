@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Sample Requests</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 2rem;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+        }
+
+        .position-relative {
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1 class="mb-4">LLM Sample Requests</h1>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <label for="provider-select" class="form-label">Provider</label>
+            <select id="provider-select" class="form-select">
+                <option value="gemini">Gemini</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="openai">OpenAI</option>
+                <option value="huggingface">HuggingFace TGI (Llama)</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label for="model-select" class="form-label">Model</label>
+            <select id="model-select" class="form-select">
+            </select>
+        </div>
+        <div class="col-md-4">
+            <div class="form-check form-switch mt-4">
+                <input class="form-check-input" type="checkbox" role="switch" id="use-vertex-checkbox">
+                <label class="form-check-label" for="use-vertex-checkbox">Use Vertex AI</label>
+            </div>
+        </div>
+    </div>
+
+    <div id="vertex-options" class="row mb-4 d-none">
+        <div class="col-md-6">
+            <label for="project-input" class="form-label">Project</label>
+            <input type="text" id="project-input" class="form-control" placeholder="gcp-project-id">
+        </div>
+        <div class="col-md-6">
+            <label for="region-select" class="form-label">Region</label>
+            <select id="region-select" class="form-select">
+            </select>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs" id="myTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="non-streaming-tab" data-bs-toggle="tab" data-bs-target="#non-streaming"
+                    type="button" role="tab" aria-controls="non-streaming" aria-selected="true">Non-Streaming
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="streaming-tab" data-bs-toggle="tab" data-bs-target="#streaming" type="button"
+                    role="tab" aria-controls="streaming" aria-selected="false">Streaming
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="myTabContent">
+        <div class="tab-pane fade show active" id="non-streaming" role="tabpanel" aria-labelledby="non-streaming-tab">
+            <div id="non-streaming-content" class="mt-3"></div>
+        </div>
+        <div class="tab-pane fade" id="streaming" role="tabpanel" aria-labelledby="streaming-tab">
+            <div id="streaming-content" class="mt-3"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const json = `{
+  "regions": [
+    "global",
+    "us-central1",
+    "us-east5",
+    "europe-west4"
+  ],
+  "gemini": {
+    "models": [
+      "gemini-2.5-flash-lite",
+      "gemini-2.5-flash",
+      "gemini-2.5-pro"
+    ],
+    "non_streaming": {
+      "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/google/models/{{model}}:generateContent",
+      "curl": "curl \\"https://generativelanguage.googleapis.com/v1beta/models/{{model}}:generateContent?key=$GEMINI_API_KEY\\" \\\\\\n  -H \\"Content-Type: application/json\\" \\\\\\n  -d ",
+      "text": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the capital of France?"
+                }
+              ]
+            }
+          ]
+        },
+        "response": {
+          "candidates": [
+            {
+              "content": {
+                "parts": [
+                  {
+                    "text": "The capital of France is **Paris**."
+                  }
+                ],
+                "role": "model"
+              },
+              "finishReason": "STOP",
+              "index": 0
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 7,
+            "candidatesTokenCount": 8,
+            "totalTokenCount": 15,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 7
+              }
+            ]
+          },
+          "modelVersion": "{{model}}",
+          "responseId": "00000000"
+        }
+      }
+    },
+    "streaming": {
+      "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/google/models/{{model}}:streamGenerateContent",
+      "curl": "curl \\"https://generativelanguage.googleapis.com/v1beta/models/{{model}}:streamGenerateContent?key=$GEMINI_API_KEY\\" \\\\\\n    -H 'Content-Type: application/json' \\\\\\n    -d ",
+      "text": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the capital of France?"
+                }
+              ]
+            }
+          ]
+        },
+        "response": [
+          {
+            "candidates": [
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "text": "The capital of France is **"
+                    }
+                  ],
+                  "role": "model"
+                },
+                "index": 0
+              }
+            ],
+            "usageMetadata": {
+              "promptTokenCount": 7,
+              "candidatesTokenCount": 6,
+              "totalTokenCount": 13,
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 7
+                }
+              ]
+            },
+            "modelVersion": "{{model}}",
+            "responseId": "00000000"
+          },
+          {
+            "candidates": [
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Paris**."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "finishReason": "STOP",
+                "index": 0
+              }
+            ],
+            "usageMetadata": {
+              "promptTokenCount": 7,
+              "candidatesTokenCount": 8,
+              "totalTokenCount": 15,
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 7
+                }
+              ]
+            },
+            "modelVersion": "{{model}}",
+            "responseId": "00000000"
+          }
+        ]
+      }
+    }
+  },
+  "anthropic": {
+    "models": [
+      "claude-haiku-4-5@20251001",
+      "claude-sonnet-4-5@20250929",
+      "claude-opus-4-5@20251101"
+    ],
+    "non_streaming": {
+      "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/anthropic/models/{{model}}:rawPredict",
+      "curl": "curl \\"https://api.anthropic.com/v1/messages\\" \\\\\\n  -H \\"x-api-key: $ANTHROPIC_API_KEY\\" \\\\\\n  -H \\"anthropic-version: 2023-06-01\\" \\\\\\n  -H \\"content-type: application/json\\" \\\\\\n  -d ",
+      "text": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "What is the capital of France?"
+            }
+          ]
+        },
+        "response": {
+          "model": "{{model}}",
+          "id": "msg_000001",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The capital of France is Paris."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 14,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 10
+          }
+        }
+      }
+    },
+    "streaming": {
+      "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/anthropic/models/{{model}}:streamRawPredict",
+      "curl": "curl \\"https://api.anthropic.com/v1/messages\\" \\\\\\n  -H \\"x-api-key: $ANTHROPIC_API_KEY\\" \\\\\\n  -H \\"anthropic-version: 2023-06-01\\" \\\\\\n  -H \\"content-type: application/json\\" \\\\\\n  -d ",
+      "text": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "What is the capital of France?"
+            }
+          ],
+          "stream": true
+        },
+        "response": "event: message_start\\ndata: {\\"type\\":\\"message_start\\",\\"message\\":{\\"model\\":\\"{{model}}\\",\\"id\\":\\"msg_000001\\",\\"type\\":\\"message\\",\\"role\\":\\"assistant\\",\\"content\\":[],\\"stop_reason\\":null,\\"stop_sequence\\":null,\\"usage\\":{\\"input_tokens\\":14,\\"cache_creation_input_tokens\\":0,\\"cache_read_input_tokens\\":0,\\"cache_creation\\":{\\"ephemeral_5m_input_tokens\\":0,\\"ephemeral_1h_input_tokens\\":0},\\"output_tokens\\":7}}}\\n\\nevent: ping\\ndata: {\\"type\\": \\"ping\\"}\\n\\nevent: content_block_start\\ndata: {\\"type\\":\\"content_block_start\\",\\"index\\":0,\\"content_block\\":{\\"type\\":\\"text\\",\\"text\\":\\"\\"}      }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"text_delta\\",\\"text\\":\\"The capital of France is Paris.\\"}        }\\n\\nevent: content_block_stop\\ndata: {\\"type\\":\\"content_block_stop\\",\\"index\\":0              }\\n\\nevent: message_delta\\ndata: {\\"type\\":\\"message_delta\\",\\"delta\\":{\\"stop_reason\\":\\"end_turn\\",\\"stop_sequence\\":null},\\"usage\\":{\\"output_tokens\\":10}     }\\n\\nevent: message_stop\\ndata: {\\"type\\":\\"message_stop\\"             }\\n"
+      }
+    }
+  },
+  "openai": {
+    "models": [
+      "deepseek-ai/deepseek-r1-0528-maas",
+      "deepseek-ai/deepseek-v3.1-maas",
+      "deepseek-ai/deepseek-v3.2-maas",
+      "meta/llama-3.1-405b-instruct-maas",
+      "meta/llama-3.3-70b-instruct-maas",
+      "meta/llama-4-maverick-17b-128e-instruct-maas",
+      "meta/llama-4-scout-17b-16e-instruct-maas",
+      "openai/gpt-oss-120b-maas",
+      "qwen/qwen3-235b-a22b-instruct-2507-maas",
+      "qwen/qwen3-coder-480b-a35b-instruct-maas",
+      "qwen/qwen3-next-80b-a3b-instruct-maas",
+      "qwen/qwen3-next-80b-a3b-thinking-maas"
+    ],
+    "non_streaming": {
+      "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/endpoints/openapi/chat/completions",
+      "curl": "curl https://api.openai.com/v1/chat/completions \\\\\\n -H \\"Content-Type: application/json\\" \\\\\\n  -H \\"Authorization: Bearer $OPENAI_API_KEY\\" \\\\\\n  -d ",
+      "text": {
+        "request": {
+          "model": "{{model}}",
+          "messages": [
+            {
+              "role": "user",
+              "content": "What is the capital of France?"
+            }
+          ]
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "message": {
+                "content": "The capital of France is Paris.",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 1767993506,
+          "id": "0000000",
+          "model": "{{model}}",
+          "object": "chat.completion",
+          "system_fingerprint": "",
+          "usage": {
+            "completion_tokens": 8,
+            "extra_properties": {
+              "google": {
+                "traffic_type": "ON_DEMAND"
+              }
+            },
+            "prompt_tokens": 18,
+            "total_tokens": 26
+          }
+        }
+      }
+    },
+    "streaming": {
+      "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/endpoints/openapi/chat/completions",
+      "curl": "curl https://api.openai.com/v1/chat/completions \\\\\\n  -H \\"Content-Type: application/json\\" \\\\\\n  -H \\"Authorization: Bearer $OPENAI_API_KEY\\" \\\\\\n  -d ",
+      "text": {
+        "request": {
+          "model": "{{model}}",
+          "messages": [
+            {
+              "role": "user",
+              "content": "What is the capital of France?"
+            }
+          ],
+          "stream": true
+        },
+        "response": "data: {\\"choices\\":[{\\"delta\\":{\\"content\\":\\"The\\",\\"role\\":\\"assistant\\"},\\"index\\":0,\\"logprobs\\":null}],\\"created\\":1767993722,\\"id\\":\\"000000\\",\\"model\\":\\"{{model}}\\",\\"object\\":\\"chat.completion.chunk\\",\\"system_fingerprint\\":\\"\\"}\\n\\ndata: {\\"choices\\":[{\\"delta\\":{\\"content\\":\\" capital of France is Paris.\\",\\"role\\":\\"assistant\\"},\\"finish_reason\\":\\"stop\\",\\"index\\":0,\\"logprobs\\":null}],\\"created\\":1767993722,\\"id\\":\\"000000\\",\\"model\\":\\"{{model}}\\",\\"object\\":\\"chat.completion.chunk\\",\\"system_fingerprint\\":\\"\\",\\"usage\\":{\\"completion_tokens\\":8,\\"extra_properties\\":{\\"google\\":{\\"traffic_type\\":\\"ON_DEMAND\\"}},\\"prompt_tokens\\":18,\\"total_tokens\\":26}}\\n\\ndata: [DONE]\\n"
+      }
+    }
+  },
+  "huggingface": {
+    "models": [
+      "llama-2-7b-chat"
+    ],
+    "non_streaming": {
+      "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/meta-llama/models/{{model}}:rawPredict",
+      "curl": "curl \\"https://api-inference.huggingface.co/models/meta-llama/{{model}}\\" \\\\\\n  -H \\"Content-Type: application/json\\" \\\\\\n  -H \\"Authorization: Bearer $HUGGINGFACE_API_KEY\\" \\\\\\n  -d ",
+      "text": {
+        "request": {
+          "inputs": "What is the capital of France?",
+          "parameters": {
+            "max_new_tokens": 20
+          }
+        },
+        "response": [
+          {
+            "generated_text": "What is the capital of France?\\\\nParis."
+          }
+        ]
+      }
+    },
+    "streaming": {
+      "url": "https://aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/meta-llama/models/{{model}}:streamRawPredict",
+      "curl": "curl -X POST https://api-inference.huggingface.co/models/meta-llama/{{model}} \\\\\\n  -H \\"Content-Type: application/json\\" \\\\\\n  -H \\"Authorization: Bearer $HUGGINGFACE_API_KEY\\" \\\\\\n  -d ",
+      "text": {
+        "request": {
+          "inputs": "What is the capital of France?",
+          "parameters": {
+            "max_new_tokens": 20
+          },
+          "stream": true
+        },
+        "response": "data: {\\"token\\":{\\"id\\":29902,\\"text\\":\\"What\\",\\"logprob\\":-0.0,\\"special\\":false}}\\n\\ndata: {\\"token\\":{\\"id\\":338,\\"text\\":\\" is\\",\\"logprob\\":-1.696289,\\"special\\":false}}\\n\\ndata: {\\"token\\":{\\"id\\":278,\\"text\\":\\" the\\",\\"logprob\\":-1.8164062,\\"special\\":false}}\\n\\ndata: {\\"token\\":{\\"id\\":3141,\\"text\\":\\" capital\\",\\"logprob\\":-1.8164062,\\"special\\":false}}\\n\\ndata: {\\"token\\":{\\"id\\":310,\\"text\\":\\" of\\",\\"logprob\\":-1.8164062,\\"special\\":false}}\\n\\ndata: {\\"token\\":{\\"id\\":2173,\\"text\\":\\" France\\",\\"logprob\\":-1.8164062,\\"special\\":false}}\\n\\ndata: {\\"token\\":{\\"id\\":29973,\\"text\\":\\"?\\",\\"logprob\\":-1.8164062,\\"special\\":false}}\\n\\ndata: {\\"token\\":{\\"id\\":13,\\"text\\":\\"\\\\\\\\n\\",\\"logprob\\":-1.8164062,\\"special\\":false}}\\n\\ndata: {\\"token\\":{\\"id\\":10747,\\"text\\":\\"Paris\\",\\"logprob\\":-1.8164062,\\"special\\":false}}\\n\\ndata: {\\"token\\":{\\"id\\":29889,\\"text\\":\\".\\",\\"logprob\\":-1.8164062,\\"special\\":false}}"
+      }
+    }
+  }
+}
+`;
+    const data = JSON.parse(json);
+
+    const providerSelect = document.getElementById('provider-select');
+    const modelSelect = document.getElementById('model-select');
+    const useVertexCheckbox = document.getElementById('use-vertex-checkbox');
+    const vertexOptions = document.getElementById('vertex-options');
+    const projectInput = document.getElementById('project-input');
+    const regionSelect = document.getElementById('region-select');
+    const nonStreamingContent = document.getElementById('non-streaming-content');
+    const streamingContent = document.getElementById('streaming-content');
+
+    function updateModels() {
+        const provider = providerSelect.value;
+        const models = data[provider].models;
+        modelSelect.innerHTML = models.map(model => `<option value="${model}">${model}</option>`).join('');
+        updateContent();
+    }
+
+    function updateContent() {
+        let model = modelSelect.value;
+        if (!model) return;
+
+        const useVertex = useVertexCheckbox.checked;
+        const provider = data[providerSelect.value]
+
+        if (!useVertex && providerSelect.value === 'anthropic') {
+            model = model.replace('@', '-');
+        }
+
+        let nonStreamingCurlTemplate = provider.non_streaming.curl.replace(/{{model}}/g, model);
+        let streamingCurlTemplate = provider.streaming.curl.replace(/{{model}}/g, model);
+        let nonStreamingRequest = JSON.stringify(provider.non_streaming.text.request, null, 2);
+        nonStreamingRequest = nonStreamingRequest.replace(/{{model}}/g, model);
+        let streamingRequest = JSON.stringify(provider.streaming.text.request, null, 2);
+        streamingRequest = streamingRequest.replace(/{{model}}/g, model);
+
+        if (useVertex) {
+            const project = projectInput.value;
+            const region = regionSelect.value;
+            let vertexUrl = provider.non_streaming.url
+                .replace('{{project}}', project)
+                .replace(/{{region}}/g, region)
+                .replace('{{model}}', model);
+            let streamingVertexUrl = provider.streaming.url
+                .replace('{{project}}', project)
+                .replace(/{{region}}/g, region)
+                .replace('{{model}}', model);
+            if (region === "global") {
+                vertexUrl = vertexUrl.replace('https://global-', 'https://');
+                streamingVertexUrl = streamingVertexUrl.replace('https://global-', 'https://');
+            }
+            if (providerSelect.value === 'anthropic') {
+                nonStreamingRequest = JSON.stringify(provider.non_streaming.text.request, null, 2);
+                nonStreamingRequest = nonStreamingRequest.replace('"model": "{{model}}"', '"anthropic_version": "vertex-2023-10-16"');
+                streamingRequest = JSON.stringify(provider.streaming.text.request, null, 2);
+                streamingRequest = streamingRequest.replace('"model": "{{model}}"', '"anthropic_version": "vertex-2023-10-16"');
+            }
+
+            nonStreamingCurlTemplate = `curl "${vertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -d `;
+            streamingCurlTemplate = `curl "${streamingVertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -d `;
+        }
+
+        const nonStreamingData = {
+            request: nonStreamingRequest,
+            curl: nonStreamingCurlTemplate + `'${nonStreamingRequest}'`,
+            response: JSON.stringify(provider.non_streaming.text.response, null, 2).replace(/{{model}}/g, model)
+        };
+
+        const response = typeof provider.streaming.text.response === 'object' ? JSON.stringify(provider.streaming.text.response, null, 2) : provider.streaming.text.response;
+        const streamingData = {
+            request: streamingRequest,
+            curl: streamingCurlTemplate + `'${streamingRequest}'`,
+            response: response.replace(/{{model}}/g, model)
+        };
+
+        nonStreamingContent.innerHTML = createContentBlocks('non-streaming', nonStreamingData);
+        streamingContent.innerHTML = createContentBlocks('streaming', streamingData);
+
+        addCopyListeners();
+    }
+
+    function createContentBlocks(prefix, contentData) {
+        if (!contentData) return '<p>No data available.</p>';
+        return `
+                <div class="mb-3">
+                    <h5>cURL Command</h5>
+                    <div class="position-relative">
+                        <textarea id="${prefix}-curl" class="form-control" rows="10" readonly>${contentData.curl}</textarea>
+                        <button class="btn btn-light btn-sm copy-btn" data-clipboard-target="#${prefix}-curl">Copy</button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h5>Sample Response</h5>
+                    <div class="position-relative">
+                        <textarea id="${prefix}-response" class="form-control" rows="10" readonly>${contentData.response}</textarea>
+                        <button class="btn btn-light btn-sm copy-btn" data-clipboard-target="#${prefix}-response">Copy</button>
+                    </div>
+                </div>
+            `;
+    }
+
+    function addCopyListeners() {
+        const copyButtons = document.querySelectorAll('.copy-btn');
+        copyButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = document.querySelector(btn.dataset.clipboardTarget);
+                navigator.clipboard.writeText(target.value).then(() => {
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                    }, 2000);
+                });
+            });
+        });
+    }
+
+    useVertexCheckbox.addEventListener('change', () => {
+        vertexOptions.classList.toggle('d-none', !useVertexCheckbox.checked);
+        updateContent();
+    });
+
+    regionSelect.innerHTML = data.regions.map(region => `<option value="${region}">${region}</option>`).join('');
+
+    providerSelect.addEventListener('change', updateModels);
+    modelSelect.addEventListener('change', updateContent);
+    projectInput.addEventListener('input', updateContent);
+    regionSelect.addEventListener('change', updateContent);
+
+    // Initial load
+    updateModels();
+</script>
+</body>
+</html>
