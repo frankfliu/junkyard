@@ -12,7 +12,7 @@ use record::{Record, count_text_tokens};
 use reqwest::Client;
 use stats::{Stats, generate_stats};
 
-use serde_json::{Value, from_str};
+use serde_json::{Value, from_str, json};
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -132,6 +132,9 @@ async fn process_single_record(
     total_requests: u64,
 ) -> Result<(Duration, usize), anyhow::Error> {
     let request_builder = record.clone().into_request_builder(client);
+    tracing::trace!({
+       request = record.body,
+    });
 
     let start = Instant::now();
     let res = request_builder.send().await.map_err(|e| {
@@ -216,6 +219,10 @@ async fn process_single_record(
 async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
     let mut record = Record::new(cli).await?;
     let Some(path) = &cli.dataset else {
+        if let Some(body) = record.body {
+            record.body = Some(convert_to_llm_format(cli, body));
+        }
+        record.set_extra_parameters(&cli.extra_parameters)?;
         record.input_tokens = record.count_input_tokens();
         return Ok(vec![record]);
     };
@@ -247,12 +254,80 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
         .map(|(k, v)| {
             let mut record = record.clone();
             record.id = k;
-            record.body = Some(v);
+            record.body = Some(convert_to_llm_format(cli, v));
             record.set_extra_parameters(&cli.extra_parameters)?;
             record.input_tokens = record.count_input_tokens();
             Ok(record)
         })
         .collect()
+}
+
+fn convert_to_llm_format(cli: &Args, v: String) -> String {
+    let Ok(json) = from_str::<Value>(&v) else {
+        return v;
+    };
+
+    match cli.jq.as_deref() {
+        Some("TGI") => {
+            if let Some(inputs) = json.get("prompts") {
+                json!({"inputs": inputs}).to_string()
+            } else {
+                v
+            }
+        }
+        Some("gemini") => {
+            if let Some(inputs) = json.get("inputs").or(json.get("prompts")) {
+                json!({
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": [
+                                {
+                                    "text": inputs
+                                }
+                            ]
+                        }
+                    ]
+                })
+                .to_string()
+            } else {
+                v
+            }
+        }
+        Some("anthropic") => {
+            if let Some(inputs) = json.get("inputs").or(json.get("prompts")) {
+                json!({
+                    "anthropic_version": "vertex-2023-10-16",
+                    "max_tokens": 1024,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": inputs
+                        }
+                    ]
+                })
+                .to_string()
+            } else {
+                v
+            }
+        }
+        Some("openai") => {
+            if let Some(inputs) = json.get("inputs").or(json.get("prompts")) {
+                json!({
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": inputs
+                        }
+                    ]
+                })
+                .to_string()
+            } else {
+                v
+            }
+        }
+        _ => v,
+    }
 }
 
 fn get_delay(delay: &Option<String>) -> Option<Duration> {
@@ -390,7 +465,7 @@ mod tests {
 
         // Test with application/json
         headers.insert("content-type", HeaderValue::from_static("application/json"));
-        let body = "{\"foo\": \"bar\"}";
+        let body = r#"{"foo": "bar"}"#;
         assert_eq!(get_text_response(&args, &headers, body), "");
 
         // Test with text/event-stream
@@ -404,15 +479,79 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_dataset_from_file() {
-        let mut args = default_args();
         let file = tempfile::NamedTempFile::new().unwrap();
         let path = file.path().to_str().unwrap().to_string();
-        fs::write(&path, "line 1\nline 2").unwrap();
-        args.dataset = Some(path.into());
+        fs::write(&path, "{\"inputs\":\"line 1\"}\n{\"prompts\":\"line 2\"}").unwrap();
+
+        let args = Args::parse_from([
+            "lmbench",
+            "https://localhost",
+            "-j",
+            "gemini",
+            "--dataset",
+            path.as_str(),
+        ]);
         let records = load_dataset(&args).await.unwrap();
         assert_eq!(records.len(), 2);
-        assert_eq!(records[0].body, Some("line 1".to_string()));
-        assert_eq!(records[1].body, Some("line 2".to_string()));
+        assert_eq!(
+            records[0].body,
+            Some(r#"{"contents":[{"role":"user","parts":[{"text":"line 1"}]}]}"#.to_string())
+        );
+        assert_eq!(
+            records[1].body,
+            Some(r#"{"contents":[{"role":"user","parts":[{"text":"line 2"}]}]}"#.to_string())
+        );
+
+        let args = Args::parse_from([
+            "lmbench",
+            "https://localhost",
+            "-j",
+            "anthropic",
+            "--dataset",
+            path.as_str(),
+        ]);
+        let records = load_dataset(&args).await.unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(
+            records[0].body,
+            Some(r#"{"anthropic_version":"vertex-2023-10-16","max_tokens":1024,"messages":[{"role":"user","content":"line 1"}]}"#.to_string())
+        );
+        assert_eq!(
+            records[1].body,
+            Some(r#"{"anthropic_version":"vertex-2023-10-16","max_tokens":1024,"messages":[{"role":"user","content":"line 2"}]}"#.to_string())
+        );
+
+        let args = Args::parse_from([
+            "lmbench",
+            "https://localhost",
+            "-j",
+            "openai",
+            "--dataset",
+            path.as_str(),
+        ]);
+        let records = load_dataset(&args).await.unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(
+            records[0].body,
+            Some(r#"{"messages":[{"role":"user","content":"line 1"}]}"#.to_string())
+        );
+        assert_eq!(
+            records[1].body,
+            Some(r#"{"messages":[{"role":"user","content":"line 2"}]}"#.to_string())
+        );
+
+        let args = Args::parse_from([
+            "lmbench",
+            "https://localhost",
+            "-j",
+            "TGI",
+            "--dataset",
+            path.as_str(),
+        ]);
+        let records = load_dataset(&args).await.unwrap();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].body, Some(r#"{"inputs":"line 1"}"#.to_string()));
+        assert_eq!(records[1].body, Some(r#"{"inputs":"line 2"}"#.to_string()));
     }
 
     #[tokio::test]
