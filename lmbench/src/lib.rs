@@ -134,12 +134,10 @@ async fn process_single_record(
     let request_builder = record.clone().into_request_builder(client);
 
     let start = Instant::now();
-    let res = request_builder.send().await?;
-
-    if !res.status().is_success() {
-        return Err(anyhow::anyhow!("request failed: {}", res.status()));
-    }
-
+    let res = request_builder.send().await.map_err(|e| {
+        eprintln!("request send error: {:?}", e);
+        e
+    })?;
     let headers = res.headers().clone();
     let status = res.status();
 
@@ -147,6 +145,14 @@ async fn process_single_record(
         println!("Status: {}", status);
         println!("Headers:\n{:#?}", headers);
         println!("Body:");
+    }
+
+    if !status.is_success() {
+        if total_requests == 1 {
+            let text = res.text().await?;
+            eprintln!("{}", text);
+        }
+        return Err(anyhow::anyhow!("request failed: {}", status));
     }
 
     let mut stream = res.bytes_stream();
