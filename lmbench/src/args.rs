@@ -74,7 +74,7 @@ pub struct Args {
 
     /// Write to response to output directory
     #[arg(short = 'o', long, value_name = "DIRECTORY")]
-    pub(crate) output: Option<String>,
+    pub output: Option<String>,
 
     /// Number of requests to perform
     #[arg(short = 'N', long, default_value_t = 1)]

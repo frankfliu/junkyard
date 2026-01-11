@@ -13,26 +13,14 @@ use reqwest::Client;
 use stats::{Stats, generate_stats};
 
 use serde_json::{Value, from_str};
-use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
-use tokio::io::AsyncWriteExt;
-use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 type JobResult = Result<(Vec<Duration>, usize, usize, usize), anyhow::Error>;
 
 pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
-    let (tx, rx) = mpsc::channel::<(String, String)>(1024);
-
-    let writer_handle = if let Some(output_dir) = cli.output.clone() {
-        tokio::fs::create_dir_all(&output_dir).await?;
-        Some(tokio::spawn(writer_thread(rx, output_dir)))
-    } else {
-        None
-    };
-
     let client = Client::builder()
         .timeout(Duration::from_secs(cli.connect_timeout))
         .build()?;
@@ -64,7 +52,6 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         let cli = cli.clone();
         let dataset = dataset.clone();
         let bar = bar.clone();
-        let tx = tx.clone();
         handles.push(tokio::spawn(async move {
             if let Some(delay) = get_delay(&cli.delay) {
                 tokio::time::sleep(delay).await;
@@ -82,7 +69,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
                 }
 
                 let record = dataset[i as usize % dataset.len()].clone();
-                match process_single_record(&client, &cli, &record, total_requests, &tx).await {
+                match process_single_record(&client, &cli, &record, total_requests).await {
                     Ok((duration, output_tokens)) => {
                         latencies.push(duration);
                         total_output_tokens += output_tokens;
@@ -105,15 +92,9 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         }));
     }
 
-    drop(tx);
-
     let mut results = Vec::new();
     for handle in handles {
         results.push(handle.await??);
-    }
-
-    if let Some(writer_handle) = writer_handle {
-        writer_handle.await?;
     }
 
     if let Some(bar) = bar {
@@ -149,7 +130,6 @@ async fn process_single_record(
     cli: &Args,
     record: &Record,
     total_requests: u64,
-    tx: &mpsc::Sender<(String, String)>,
 ) -> Result<(Duration, usize), anyhow::Error> {
     let request_builder = record.clone().into_request_builder(client);
 
@@ -192,34 +172,35 @@ async fn process_single_record(
         let token_count = count_text_tokens(&text_response);
         output_tokens += token_count;
         if cli.output.is_some() {
-            let json = if cli.verbose {
+            if cli.verbose {
                 let mut serializable_headers = std::collections::HashMap::new();
                 for (key, value) in headers.iter() {
                     serializable_headers
                         .insert(key.to_string(), value.to_str().unwrap_or("").to_string());
                 }
-                serde_json::json!({
-                    "duration": duration.as_millis(),
-                    "token_count": token_count,
-                    "response": body_text,
-                    "headers": serializable_headers,
-                })
+                tracing::info!(
+                    task_id = record.id,
+                    duration = duration.as_millis(),
+                    token_count = token_count,
+                    response = body_text,
+                    headers = serde_json::to_string(&serializable_headers).unwrap(),
+                );
             } else {
-                serde_json::json!({
-                    "duration": duration.as_millis(),
-                    "token_count": token_count,
-                    "generated_text": text_response,
-                })
-            };
-            tx.send((record.id.clone(), json.to_string())).await?;
+                tracing::info!(
+                    task_id = record.id,
+                    duration = duration.as_millis(),
+                    token_count = token_count,
+                    generated_text = text_response,
+                );
+            }
         }
     } else {
         if cli.output.is_some() {
-            let json = serde_json::json!({
-                "duration": duration.as_millis(),
-                "response": body_text,
-            });
-            tx.send((record.id.clone(), json.to_string())).await?;
+            tracing::info!(
+                task_id = record.id,
+                duration = duration.as_millis(),
+                response = body_text,
+            );
         }
     }
 
@@ -329,25 +310,6 @@ fn apply_jq(json: &Value, jq_expr: &str, warn: bool) -> String {
         .filter_map(|v| v.as_str())
         .collect::<Vec<&str>>()
         .join("")
-}
-
-async fn writer_thread(mut rx: mpsc::Receiver<(String, String)>, output_dir: String) {
-    let mut seen_ids = HashSet::new();
-    while let Some((id, body_text)) = rx.recv().await {
-        let path = Path::new(&output_dir).join(format!("{}.jsonlines", id));
-        let mut options = tokio::fs::OpenOptions::new();
-        options.create(true);
-        if seen_ids.contains(&id) {
-            options.append(true);
-        } else {
-            options.write(true).truncate(true);
-            seen_ids.insert(id);
-        }
-        let mut file = options.open(&path).await.unwrap();
-        file.write_all(format!("{}\n", body_text).as_bytes())
-            .await
-            .unwrap()
-    }
 }
 
 #[cfg(test)]
