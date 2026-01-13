@@ -118,13 +118,28 @@ impl Record {
                     let mut json_body: Value = from_str(body)?;
                     let extra_params: Value = from_str(extra_params_str)?;
 
-                    if let (Some(body_obj), Some(extra_obj)) =
-                        (json_body.as_object_mut(), extra_params.as_object())
-                    {
-                        for (k, v) in extra_obj {
-                            body_obj.insert(k.clone(), v.clone());
+                    fn merge(a: &mut Value, b: Value) {
+                        match (a, b) {
+                            (Value::Object(a_map), Value::Object(b_map)) => {
+                                for (k, v) in b_map {
+                                    if let Some(a_val) = a_map.get_mut(&k) {
+                                        merge(a_val, v);
+                                    } else {
+                                        a_map.insert(k, v);
+                                    }
+                                }
+                            }
+                            (Value::Array(a_arr), Value::Array(b_arr)) => {
+                                a_arr.extend(b_arr);
+                            }
+                            (a, b) => {
+                                *a = b;
+                            }
                         }
                     }
+
+                    merge(&mut json_body, extra_params);
+
                     *body = serde_json::to_string(&json_body)?;
                 }
             }
@@ -338,6 +353,32 @@ mod tests {
         });
         assert_eq!(record.body, Some(expected_body.to_string()));
 
+        // Test recursive merge
+        let mut record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: Some(json!({ "a": { "b": 1 } }).to_string()),
+            input_tokens: 0,
+        };
+        record.headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+
+        let extra_parameters = Some(json!({ "a": { "c": 2 } }).to_string());
+        record.set_extra_parameters(&extra_parameters).unwrap();
+
+        let expected_body = json!({
+            "a": {
+                "b": 1,
+                "c": 2
+            }
+        });
+        assert_eq!(record.body, Some(expected_body.to_string()));
+
         // Test with no extra parameters
         let mut record = Record {
             id: "test".to_string(),
@@ -389,7 +430,7 @@ mod tests {
         );
         let extra_parameters = Some(json!({ "temperature": 0.5 }).to_string());
         record.set_extra_parameters(&extra_parameters).unwrap();
-        assert_eq!(record.body, Some(json!([1, 2, 3]).to_string()));
+        assert_eq!(record.body, Some(r#"{"temperature":0.5}"#.to_string()));
 
         // Test with empty body
         let mut record = Record {
@@ -405,7 +446,6 @@ mod tests {
             reqwest::header::CONTENT_TYPE,
             HeaderValue::from_static("application/json"),
         );
-        let extra_parameters = Some(json!({ "temperature": 0.5 }).to_string());
         record.set_extra_parameters(&extra_parameters).unwrap();
         assert_eq!(record.body, None);
 
@@ -423,9 +463,31 @@ mod tests {
             reqwest::header::CONTENT_TYPE,
             HeaderValue::from_static("text/plain"),
         );
-        let extra_parameters = Some(json!({ "temperature": 0.5 }).to_string());
         record.set_extra_parameters(&extra_parameters).unwrap();
         assert_eq!(record.body, Some(json!({"prompt": "hello"}).to_string()));
+
+        // Test array merge
+        let mut record = Record {
+            id: "test".to_string(),
+            method: Method::POST,
+            url: "http://localhost".to_string(),
+            headers: HeaderMap::new(),
+            form: HashMap::new(),
+            body: Some(json!({ "a": [1, 2] }).to_string()),
+            input_tokens: 0,
+        };
+        record.headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+
+        let extra_parameters = Some(json!({ "a": [3, 4] }).to_string());
+        record.set_extra_parameters(&extra_parameters).unwrap();
+
+        let expected_body = json!({
+            "a": [1, 2, 3, 4]
+        });
+        assert_eq!(record.body, Some(expected_body.to_string()));
     }
 
     #[test]
