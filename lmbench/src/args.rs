@@ -121,7 +121,7 @@ impl Args {
         Method::GET
     }
 
-    pub(crate) fn get_jq(&self, stream: bool) -> String {
+    pub(crate) fn get_jq_for_text(&self, stream: bool) -> String {
         match self.jq.as_deref() {
             Some("gemini") => {
                 if self.url.contains("streamGenerateContent") {
@@ -152,6 +152,24 @@ impl Args {
                 }
             }
             Some(expr) => expr.to_string(),
+        }
+    }
+
+    pub(crate) fn get_jq_for_input_tokens(&self) -> Option<String> {
+        match self.jq.as_deref() {
+            Some("gemini") => Some("$.usageMetadata.promptTokenCount".to_string()),
+            Some("anthropic") => Some("$.usage.input_tokens".to_string()),
+            Some("openai") => Some("$.usage.prompt_tokens".to_string()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn get_jq_for_output_tokens(&self) -> Option<String> {
+        match self.jq.as_deref() {
+            Some("gemini") => Some("$.usageMetadata.candidatesTokenCount".to_string()),
+            Some("anthropic") => Some("$.usage.input_tokens".to_string()),
+            Some("openai") => Some("$.usage.completion_tokens".to_string()),
+            _ => None,
         }
     }
 }
@@ -206,41 +224,110 @@ mod tests {
     }
 
     #[test]
-    fn test_get_jq() {
+    fn test_get_jq_for_text() {
         let mut args = default_args();
 
         // Test None case
-        assert_eq!(args.get_jq(true), "$.token.text");
-        assert_eq!(args.get_jq(false), "$.generated_text");
+        assert_eq!(args.get_jq_for_text(true), "$.token.text");
+        assert_eq!(args.get_jq_for_text(false), "$.generated_text");
 
         // Test gemini
         args.jq = Some("gemini".to_string());
         args.url = "https://host/streamGenerateContent".to_string();
         assert_eq!(
-            args.get_jq(true),
+            args.get_jq_for_text(true),
             "$[*].candidates[*].content.parts[*].text"
         );
         args.url = "https://host/generateContent".to_string();
-        assert_eq!(args.get_jq(false), "$.candidates[*].content.parts[*].text");
+        assert_eq!(
+            args.get_jq_for_text(false),
+            "$.candidates[*].content.parts[*].text"
+        );
 
         // Test openai
         args.jq = Some("openai".to_string());
-        assert_eq!(args.get_jq(true), "$.choices[*].delta.content");
-        assert_eq!(args.get_jq(false), "$.choices[*].message.content");
+        assert_eq!(args.get_jq_for_text(true), "$.choices[*].delta.content");
+        assert_eq!(args.get_jq_for_text(false), "$.choices[*].message.content");
 
         // Test anthropic
         args.jq = Some("anthropic".to_string());
-        assert_eq!(args.get_jq(true), "$.delta.text");
-        assert_eq!(args.get_jq(false), "$.content[*].text");
+        assert_eq!(args.get_jq_for_text(true), "$.delta.text");
+        assert_eq!(args.get_jq_for_text(false), "$.content[*].text");
 
         // Test TGI
         args.jq = Some("TGI".to_string());
-        assert_eq!(args.get_jq(true), "$.token.text");
-        assert_eq!(args.get_jq(false), "$.generated_text");
+        assert_eq!(args.get_jq_for_text(true), "$.token.text");
+        assert_eq!(args.get_jq_for_text(false), "$.generated_text");
 
         // Test custom expression
         args.jq = Some(".foo.bar".to_string());
-        assert_eq!(args.get_jq(true), ".foo.bar");
-        assert_eq!(args.get_jq(false), ".foo.bar");
+        assert_eq!(args.get_jq_for_text(true), ".foo.bar");
+        assert_eq!(args.get_jq_for_text(false), ".foo.bar");
+    }
+
+    #[test]
+    fn test_get_jq_for_input_tokens() {
+        let mut args = default_args();
+
+        // Test None case
+        assert_eq!(args.get_jq_for_input_tokens(), None);
+
+        // Test gemini
+        args.jq = Some("gemini".to_string());
+        assert_eq!(
+            args.get_jq_for_input_tokens(),
+            Some("$.usageMetadata.promptTokenCount".to_string())
+        );
+
+        // Test openai
+        args.jq = Some("openai".to_string());
+        assert_eq!(
+            args.get_jq_for_input_tokens(),
+            Some("$.usage.prompt_tokens".to_string())
+        );
+
+        // Test anthropic
+        args.jq = Some("anthropic".to_string());
+        assert_eq!(
+            args.get_jq_for_input_tokens(),
+            Some("$.usage.input_tokens".to_string())
+        );
+
+        // Test custom expression
+        args.jq = Some(".foo.bar".to_string());
+        assert_eq!(args.get_jq_for_input_tokens(), None);
+    }
+
+    #[test]
+    fn test_get_jq_for_output_tokens() {
+        let mut args = default_args();
+
+        // Test None case
+        assert_eq!(args.get_jq_for_output_tokens(), None);
+
+        // Test gemini
+        args.jq = Some("gemini".to_string());
+        assert_eq!(
+            args.get_jq_for_output_tokens(),
+            Some("$.usageMetadata.candidatesTokenCount".to_string())
+        );
+
+        // Test openai
+        args.jq = Some("openai".to_string());
+        assert_eq!(
+            args.get_jq_for_output_tokens(),
+            Some("$.usage.completion_tokens".to_string())
+        );
+
+        // Test anthropic
+        args.jq = Some("anthropic".to_string());
+        assert_eq!(
+            args.get_jq_for_output_tokens(),
+            Some("$.usage.input_tokens".to_string())
+        );
+
+        // Test custom expression
+        args.jq = Some(".foo.bar".to_string());
+        assert_eq!(args.get_jq_for_output_tokens(), None);
     }
 }

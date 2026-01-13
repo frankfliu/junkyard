@@ -18,7 +18,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
-type JobResult = Result<(Vec<Duration>, usize, usize, usize), anyhow::Error>;
+type JobResult = Result<(Vec<Duration>, usize, usize, usize, usize, usize), anyhow::Error>;
 
 pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     let client = Client::builder()
@@ -58,8 +58,10 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
             }
 
             let mut latencies = Vec::new();
-            let mut total_output_tokens = 0;
             let mut total_input_tokens = 0;
+            let mut total_output_tokens = 0;
+            let mut total_server_input_tokens = 0;
+            let mut total_server_output_tokens = 0;
             let mut error_requests = 0;
             for i in 0..cli.repeat {
                 if let Some(test_duration) = test_duration {
@@ -70,9 +72,16 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
 
                 let record = dataset[i as usize % dataset.len()].clone();
                 match process_single_record(&client, &cli, &record, total_requests).await {
-                    Ok((duration, output_tokens)) => {
+                    Ok((
+                        duration,
+                        benchmark_output_tokens,
+                        server_input_tokens,
+                        server_output_tokens,
+                    )) => {
                         latencies.push(duration);
-                        total_output_tokens += output_tokens;
+                        total_output_tokens += benchmark_output_tokens;
+                        total_server_input_tokens += server_input_tokens;
+                        total_server_output_tokens += server_output_tokens;
                     }
                     Err(_) => {
                         error_requests += 1;
@@ -85,8 +94,10 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
             }
             Ok((
                 latencies,
-                total_output_tokens,
                 total_input_tokens,
+                total_output_tokens,
+                total_server_input_tokens,
+                total_server_output_tokens,
                 error_requests,
             ))
         }));
@@ -104,18 +115,32 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     let mut all_latencies = Vec::new();
     let mut all_output_tokens = 0;
     let mut all_input_tokens = 0;
+    let mut all_server_input_tokens = 0;
+    let mut all_server_output_tokens = 0;
     let mut all_errors = 0;
-    for (latencies, total_output_tokens, total_input_tokens, error_requests) in results {
+    for (
+        latencies,
+        total_input_tokens,
+        total_output_tokens,
+        total_server_it,
+        total_server_ot,
+        error_requests,
+    ) in results
+    {
         all_latencies.extend(latencies);
-        all_output_tokens += total_output_tokens;
         all_input_tokens += total_input_tokens;
+        all_output_tokens += total_output_tokens;
+        all_server_input_tokens += total_server_it;
+        all_server_output_tokens += total_server_ot;
         all_errors += error_requests;
     }
 
     let stats = generate_stats(
         &all_latencies,
-        all_output_tokens,
         all_input_tokens,
+        all_output_tokens,
+        all_server_input_tokens,
+        all_server_output_tokens,
         all_errors,
     );
     if cli.verbose || total_requests > 1 {
@@ -130,7 +155,7 @@ async fn process_single_record(
     cli: &Args,
     record: &Record,
     total_requests: u64,
-) -> Result<(Duration, usize), anyhow::Error> {
+) -> Result<(Duration, usize, usize, usize), anyhow::Error> {
     let request_builder = record.clone().into_request_builder(client);
     tracing::trace!({
        request = record.body,
@@ -175,11 +200,15 @@ async fn process_single_record(
 
     let duration = start.elapsed();
 
-    let mut output_tokens = 0;
+    let mut benchmark_output_tokens = 0;
+    let mut server_input_tokens = 0;
+    let mut server_output_tokens = 0;
     if cli.tokens {
-        let text_response = get_text_response(&cli, &headers, &body_text);
+        let (text_response, it, ot) = get_text_response(&cli, &headers, &body_text);
         let token_count = count_text_tokens(&text_response);
-        output_tokens += token_count;
+        server_input_tokens += it;
+        server_output_tokens += ot;
+        benchmark_output_tokens += token_count;
         if cli.output.is_some() {
             if cli.verbose {
                 let mut serializable_headers = std::collections::HashMap::new();
@@ -190,7 +219,10 @@ async fn process_single_record(
                 tracing::info!(
                     task_id = record.id,
                     duration = duration.as_millis(),
-                    token_count = token_count,
+                    benchmark_output_tokens = token_count,
+                    server_input_tokens = it,
+                    server_output_tokens = ot,
+                    generated_text = text_response,
                     response = body_text,
                     headers = serde_json::to_string(&serializable_headers).unwrap(),
                 );
@@ -198,7 +230,9 @@ async fn process_single_record(
                 tracing::info!(
                     task_id = record.id,
                     duration = duration.as_millis(),
-                    token_count = token_count,
+                    benchmark_output_tokens = token_count,
+                    server_input_tokens = it,
+                    server_output_tokens = ot,
                     generated_text = text_response,
                 );
             }
@@ -213,7 +247,12 @@ async fn process_single_record(
         }
     }
 
-    Ok((duration, output_tokens))
+    Ok((
+        duration,
+        benchmark_output_tokens,
+        server_input_tokens,
+        server_output_tokens,
+    ))
 }
 
 async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
@@ -353,44 +392,76 @@ fn get_delay(delay: &Option<String>) -> Option<Duration> {
     })
 }
 
-fn get_text_response(cli: &Args, headers: &reqwest::header::HeaderMap, body: &str) -> String {
+fn get_text_response(
+    cli: &Args,
+    headers: &reqwest::header::HeaderMap,
+    body: &str,
+) -> (String, usize, usize) {
     let content_type = headers
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     if content_type.contains("text/event-stream") {
-        let aggregated_body = body
+        let aggregated_resp = body
             .lines()
             .filter_map(|line| line.strip_prefix("data: "))
             .map(str::trim)
             .filter(|s| !s.is_empty() && *s != "[DONE]")
             .filter_map(|line| from_str::<Value>(line).ok())
-            .map(|json| apply_jq(&json, &cli.get_jq(true), false))
-            .collect::<Vec<String>>()
+            .map(|json| parse_json_response(&cli, &json, true, false))
+            .collect::<Vec<(String, usize, usize)>>();
+        let aggregated_text = aggregated_resp
+            .iter()
+            .map(|s| s.0.as_str())
+            .collect::<Vec<_>>()
             .join("");
-        if aggregated_body.is_empty() {
+        if aggregated_text.is_empty() {
             eprintln!("warning: no output token found in response");
         }
-        return aggregated_body;
+        let input_tokens: usize = aggregated_resp.iter().map(|s| s.1).sum::<usize>();
+        let output_tokens: usize = aggregated_resp.iter().map(|s| s.2).sum::<usize>();
+        (aggregated_text, input_tokens, output_tokens)
     } else if content_type.contains("application/json") {
         let json: Value =
             from_str(body).unwrap_or_else(|_| panic!("Failed to parse json body: {}", body));
-        return apply_jq(&json, &cli.get_jq(false), true);
+        parse_json_response(&cli, &json, false, true)
+    } else {
+        (body.to_string(), 0, 0)
     }
-    body.to_string()
 }
 
-fn apply_jq(json: &Value, jq_expr: &str, warn: bool) -> String {
-    let tokens_val = jsonpath_lib::select(json, jq_expr)
+fn parse_json_response(
+    cli: &Args,
+    json: &Value,
+    stream: bool,
+    warn: bool,
+) -> (String, usize, usize) {
+    let jq_expr = &cli.get_jq_for_text(stream);
+    let selected = jsonpath_lib::select(json, jq_expr)
         .unwrap_or_else(|_| panic!("Failed to apply jq: {}", jq_expr));
-    if warn && tokens_val.is_empty() {
+    if warn && selected.is_empty() {
         eprintln!("warning: jq expression returned no results: {}", jq_expr);
     }
-    tokens_val
+    let text = selected
         .iter()
         .filter_map(|v| v.as_str())
         .collect::<Vec<&str>>()
-        .join("")
+        .join("");
+    let input_tokens = if let Some(jq) = cli.get_jq_for_input_tokens() {
+        let selected = jsonpath_lib::select(json, &jq)
+            .unwrap_or_else(|_| panic!("Failed to apply jq: {}", jq));
+        selected.iter().filter_map(|v| v.as_u64()).sum::<u64>() as usize
+    } else {
+        0
+    };
+    let output_tokens = if let Some(jq) = cli.get_jq_for_output_tokens() {
+        let selected = jsonpath_lib::select(json, &jq)
+            .unwrap_or_else(|_| panic!("Failed to apply jq: {}", jq));
+        selected.iter().filter_map(|v| v.as_u64()).sum::<u64>() as usize
+    } else {
+        0
+    };
+    (text, input_tokens, output_tokens)
 }
 
 #[cfg(test)]
@@ -446,27 +517,24 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_jq() {
-        let json = json!([{"foo": "bar"}, {"foo": "baz"}]);
-        assert_eq!(apply_jq(&json, "$[*].foo", false), "barbaz");
-
-        let json = json!({"bar": "baz"});
-        assert_eq!(apply_jq(&json, "$.foo", false), "");
-    }
-
-    #[test]
     fn test_get_text_response() {
         let args = default_args();
         let mut headers = HeaderMap::new();
 
         // Test with plain text
         let body = "hello world";
-        assert_eq!(get_text_response(&args, &headers, body), "hello world");
+        assert_eq!(
+            get_text_response(&args, &headers, body),
+            ("hello world".to_string(), 0, 0)
+        );
 
         // Test with application/json
         headers.insert("content-type", HeaderValue::from_static("application/json"));
         let body = r#"{"foo": "bar"}"#;
-        assert_eq!(get_text_response(&args, &headers, body), "");
+        assert_eq!(
+            get_text_response(&args, &headers, body),
+            ("".to_string(), 0, 0)
+        );
 
         // Test with text/event-stream
         headers.insert(
@@ -474,7 +542,10 @@ mod tests {
             HeaderValue::from_static("text/event-stream"),
         );
         let body = "data: {\"foo\": \"bar\"}\n\ndata: {\"foo\": \"baz\"}\n\ndata: [DONE]\n";
-        assert_eq!(get_text_response(&args, &headers, body), "");
+        assert_eq!(
+            get_text_response(&args, &headers, body),
+            ("".to_string(), 0, 0)
+        );
     }
 
     #[tokio::test]
@@ -582,9 +653,25 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_json_response() {
+        let args = default_args();
+        let json = json!([{"foo": "bar"}, {"foo": "baz"}]);
+        assert_eq!(parse_json_response(&args, &json, false, false).0, "");
+
+        let json = json!({"bar": "baz"});
+        assert_eq!(parse_json_response(&args, &json, false, true).0, "");
+    }
+
+    #[test]
     #[should_panic(expected = "Failed to apply jq: invalid jq expression")]
-    fn test_apply_jq_panic_with_invalid_expression() {
+    fn test_parse_json_response_panic_with_invalid_expression() {
+        let args = Args::parse_from([
+            "lmbench",
+            "https://localhost",
+            "-j",
+            "invalid jq expression",
+        ]);
         let json = json!({"foo": "bar"});
-        apply_jq(&json, "invalid jq expression", false);
+        parse_json_response(&args, &json, false, false);
     }
 }

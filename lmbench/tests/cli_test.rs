@@ -68,7 +68,7 @@ async fn test_main_with_output() {
 
     let content = std::fs::read_to_string(dir.path().join("output.log")).unwrap();
     assert!(content.contains(r#""generated_text":"world""#));
-    assert!(content.contains(r#""token_count":1"#));
+    assert!(content.contains(r#""benchmark_output_tokens":1"#));
 
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("lmbench"));
     cmd.arg(server.url("/test"))
@@ -83,5 +83,5 @@ async fn test_main_with_output() {
 
     let content = std::fs::read_to_string(dir.path().join("output.log")).unwrap();
     assert!(content.contains("headers"));
-    assert!(content.contains(r#""token_count":1"#));
+    assert!(content.contains(r#""benchmark_output_tokens":1"#));
 }

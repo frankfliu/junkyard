@@ -18,12 +18,16 @@ pub struct Stats {
     pub output_tokens_per_second: f64,
     pub total_input_tokens: usize,
     pub input_tokens_per_second: f64,
+    pub server_input_tokens: Option<usize>,
+    pub server_output_tokens: Option<usize>,
 }
 
 pub fn generate_stats(
     latencies: &[Duration],
-    total_output_tokens: usize,
     total_input_tokens: usize,
+    total_output_tokens: usize,
+    server_input_tokens: usize,
+    server_output_tokens: usize,
     error_requests: usize,
 ) -> Stats {
     if latencies.is_empty() {
@@ -42,6 +46,8 @@ pub fn generate_stats(
             output_tokens_per_second: 0.0,
             total_input_tokens: 0,
             input_tokens_per_second: 0.0,
+            server_input_tokens: None,
+            server_output_tokens: None,
         };
     }
 
@@ -61,6 +67,17 @@ pub fn generate_stats(
     let output_tokens_per_second = total_output_tokens as f64 / total_time.as_secs_f64();
     let input_tokens_per_second = total_input_tokens as f64 / total_time.as_secs_f64();
 
+    let server_it = if server_input_tokens == 0 {
+        None
+    } else {
+        Some(server_input_tokens)
+    };
+    let server_ot = if server_output_tokens == 0 {
+        None
+    } else {
+        Some(server_output_tokens)
+    };
+
     Stats {
         success_requests,
         error_requests,
@@ -76,6 +93,8 @@ pub fn generate_stats(
         output_tokens_per_second,
         total_input_tokens,
         input_tokens_per_second,
+        server_input_tokens: server_it,
+        server_output_tokens: server_ot,
     }
 }
 
@@ -105,14 +124,16 @@ mod tests {
             Duration::from_millis(900),
             Duration::from_millis(1000),
         ];
-        let total_output_tokens = 1000;
         let total_input_tokens = 500;
+        let total_output_tokens = 1000;
         let error_requests = 2;
 
         let stats = generate_stats(
             &latencies,
-            total_output_tokens,
             total_input_tokens,
+            total_output_tokens,
+            0,
+            0,
             error_requests,
         );
 
@@ -136,14 +157,16 @@ mod tests {
     #[test]
     fn test_generate_stats_empty() {
         let latencies = vec![];
-        let total_output_tokens = 0;
         let total_input_tokens = 0;
+        let total_output_tokens = 0;
         let error_requests = 0;
 
         let stats = generate_stats(
             &latencies,
-            total_output_tokens,
             total_input_tokens,
+            total_output_tokens,
+            0,
+            0,
             error_requests,
         );
 
