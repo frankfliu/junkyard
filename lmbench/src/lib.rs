@@ -285,20 +285,48 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
     } else {
         let content = fs::read_to_string(path)?;
         for (i, line) in content.lines().enumerate() {
-            data.push(((i + 1).to_string(), line.to_string()));
+            data.push((i.to_string(), line.to_string()));
         }
     }
 
-    data.into_iter()
+    let bar = if !cli.silent {
+        let bar = ProgressBar::new(data.len() as u64);
+        bar.set_draw_target(ProgressDrawTarget::stderr());
+        bar.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+                )
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+        Some(bar)
+    } else {
+        None
+    };
+
+    let records = data
+        .into_iter()
         .map(|(k, v)| {
             let mut record = record.clone();
             record.id = k;
             record.body = Some(convert_to_llm_format(cli, v));
             record.set_extra_parameters(&cli.extra_parameters)?;
-            record.input_tokens = record.count_input_tokens();
+            if cli.tokens {
+                record.input_tokens = record.count_input_tokens();
+            }
+            if let Some(bar) = &bar {
+                bar.inc(1);
+            }
             Ok(record)
         })
-        .collect()
+        .collect::<Result<Vec<Record>, anyhow::Error>>()?;
+
+    if let Some(bar) = bar {
+        bar.finish();
+    }
+
+    Ok(records)
 }
 
 fn convert_to_llm_format(cli: &Args, v: String) -> String {
