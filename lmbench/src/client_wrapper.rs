@@ -93,10 +93,10 @@ impl ClientWrapper {
 
                 let mut body_bytes = Vec::new();
                 while let Some(event) = stream.body.recv().await? {
-                    if let aws_sdk_bedrockruntime::types::ResponseStream::Chunk(payload) = event {
-                        if let Some(bytes) = payload.bytes {
-                            body_bytes.extend_from_slice(bytes.as_ref());
-                        }
+                    if let aws_sdk_bedrockruntime::types::ResponseStream::Chunk(payload) = event
+                        && let Some(bytes) = payload.bytes
+                    {
+                        body_bytes.extend_from_slice(bytes.as_ref());
                     }
                 }
                 let mut headers = HeaderMap::new();

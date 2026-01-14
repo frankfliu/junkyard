@@ -112,37 +112,35 @@ impl Record {
         if let (Some(extra_params_str), Some(content_type)) = (
             extra_parameters,
             self.headers.get(reqwest::header::CONTENT_TYPE),
-        ) {
-            if content_type.to_str()?.contains("application/json") {
-                if let Some(body) = self.body.as_mut() {
-                    let mut json_body: Value = from_str(body)?;
-                    let extra_params: Value = from_str(extra_params_str)?;
+        ) && content_type.to_str()?.contains("application/json")
+            && let Some(body) = self.body.as_mut()
+        {
+            let mut json_body: Value = from_str(body)?;
+            let extra_params: Value = from_str(extra_params_str)?;
 
-                    fn merge(a: &mut Value, b: Value) {
-                        match (a, b) {
-                            (Value::Object(a_map), Value::Object(b_map)) => {
-                                for (k, v) in b_map {
-                                    if let Some(a_val) = a_map.get_mut(&k) {
-                                        merge(a_val, v);
-                                    } else {
-                                        a_map.insert(k, v);
-                                    }
-                                }
-                            }
-                            (Value::Array(a_arr), Value::Array(b_arr)) => {
-                                a_arr.extend(b_arr);
-                            }
-                            (a, b) => {
-                                *a = b;
+            fn merge(a: &mut Value, b: Value) {
+                match (a, b) {
+                    (Value::Object(a_map), Value::Object(b_map)) => {
+                        for (k, v) in b_map {
+                            if let Some(a_val) = a_map.get_mut(&k) {
+                                merge(a_val, v);
+                            } else {
+                                a_map.insert(k, v);
                             }
                         }
                     }
-
-                    merge(&mut json_body, extra_params);
-
-                    *body = serde_json::to_string(&json_body)?;
+                    (Value::Array(a_arr), Value::Array(b_arr)) => {
+                        a_arr.extend(b_arr);
+                    }
+                    (a, b) => {
+                        *a = b;
+                    }
                 }
             }
+
+            merge(&mut json_body, extra_params);
+
+            *body = serde_json::to_string(&json_body)?;
         }
         Ok(())
     }

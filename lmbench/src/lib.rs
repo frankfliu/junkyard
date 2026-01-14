@@ -62,10 +62,10 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
             let mut total_server_output_tokens = 0;
             let mut error_requests = 0;
             for i in 0..cli.repeat {
-                if let Some(test_duration) = test_duration {
-                    if start_time.elapsed() > test_duration {
-                        break;
-                    }
+                if let Some(test_duration) = test_duration
+                    && start_time.elapsed() > test_duration
+                {
+                    break;
                 }
 
                 let record = dataset[i as usize % dataset.len()].clone();
@@ -162,7 +162,7 @@ async fn process_single_record(
     let mut server_input_tokens = 0;
     let mut server_output_tokens = 0;
     if cli.tokens {
-        let (text_response, it, ot) = get_text_response(&cli, &headers, &body_text);
+        let (text_response, it, ot) = get_text_response(cli, &headers, &body_text);
         let token_count = count_text_tokens(&text_response);
         server_input_tokens += it;
         server_output_tokens += ot;
@@ -195,14 +195,12 @@ async fn process_single_record(
                 );
             }
         }
-    } else {
-        if cli.output.is_some() {
-            tracing::info!(
-                task_id = record.id,
-                duration = duration.as_millis(),
-                response = body_text,
-            );
-        }
+    } else if cli.output.is_some() {
+        tracing::info!(
+            task_id = record.id,
+            duration = duration.as_millis(),
+            response = body_text,
+        );
     }
 
     Ok((
@@ -394,7 +392,7 @@ fn get_text_response(
             .map(str::trim)
             .filter(|s| !s.is_empty() && *s != "[DONE]")
             .filter_map(|line| from_str::<Value>(line).ok())
-            .map(|json| parse_json_response(&cli, &json, true, false))
+            .map(|json| parse_json_response(cli, &json, true, false))
             .collect::<Vec<(String, usize, usize)>>();
         let aggregated_text = aggregated_resp
             .iter()
@@ -410,7 +408,7 @@ fn get_text_response(
     } else if content_type.contains("application/json") {
         let json: Value =
             from_str(body).unwrap_or_else(|_| panic!("Failed to parse json body: {}", body));
-        parse_json_response(&cli, &json, false, true)
+        parse_json_response(cli, &json, false, true)
     } else {
         (body.to_string(), 0, 0)
     }
