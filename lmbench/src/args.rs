@@ -72,13 +72,17 @@ pub struct Args {
     #[arg(short, long, value_name = "EXPRESSION")]
     pub(crate) jq: Option<String>,
 
-    /// Write to response to output directory
-    #[arg(short = 'o', long, value_name = "DIRECTORY")]
-    pub output: Option<String>,
+    /// model ID
+    #[arg(short, long)]
+    pub model_id: Option<String>,
 
     /// Number of requests to perform
     #[arg(short = 'N', long, default_value_t = 1)]
     pub(crate) repeat: u32,
+
+    /// Write to response to output directory
+    #[arg(short = 'o', long, value_name = "DIRECTORY")]
+    pub output: Option<String>,
 
     /// Silent mode
     #[arg(short, long)]

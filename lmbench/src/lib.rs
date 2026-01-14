@@ -1,15 +1,15 @@
 pub mod args;
+pub mod client_wrapper;
 pub(crate) mod record;
 pub mod stats;
 
 use args::Args;
+use client_wrapper::ClientWrapper;
 
-use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use rand::Rng;
 use record::{Record, count_text_tokens};
-use reqwest::Client;
 use stats::{Stats, generate_stats};
 
 use serde_json::{Value, from_str, json};
@@ -21,9 +21,7 @@ use tokio::task::JoinHandle;
 type JobResult = Result<(Vec<Duration>, usize, usize, usize, usize, usize), anyhow::Error>;
 
 pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
-    let client = Client::builder()
-        .timeout(Duration::from_secs(cli.connect_timeout))
-        .build()?;
+    let client = ClientWrapper::new(&cli).await?;
 
     let dataset = load_dataset(&cli).await?;
 
@@ -151,53 +149,13 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
 }
 
 async fn process_single_record(
-    client: &Client,
+    client: &ClientWrapper,
     cli: &Args,
     record: &Record,
     total_requests: u64,
 ) -> Result<(Duration, usize, usize, usize), anyhow::Error> {
-    let request_builder = record.clone().into_request_builder(client);
-    tracing::trace!({
-       request = record.body,
-    });
-
     let start = Instant::now();
-    let res = request_builder.send().await.map_err(|e| {
-        eprintln!("request send error: {:?}", e);
-        e
-    })?;
-    let headers = res.headers().clone();
-    let status = res.status();
-
-    if cli.verbose && total_requests == 1 {
-        println!("Status: {}", status);
-        println!("Headers:\n{:#?}", headers);
-        println!("Body:");
-    }
-
-    if !status.is_success() {
-        if total_requests == 1 {
-            let text = res.text().await?;
-            eprintln!("{}", text);
-        }
-        return Err(anyhow::anyhow!("request failed: {}", status));
-    }
-
-    let mut stream = res.bytes_stream();
-    let mut body_bytes = Vec::new();
-
-    while let Some(item) = stream.next().await {
-        let chunk = item?;
-        if total_requests == 1 {
-            print!("{}", String::from_utf8_lossy(&chunk));
-        }
-        body_bytes.extend_from_slice(&chunk);
-    }
-    if total_requests == 1 {
-        println!();
-    }
-    let body_text = String::from_utf8(body_bytes)?;
-
+    let (body_text, headers) = client.send_request(cli, record, total_requests).await?;
     let duration = start.elapsed();
 
     let mut benchmark_output_tokens = 0;

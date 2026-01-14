@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0"
+aws-config = "1.5.2"
+aws-sdk-bedrock = "1.33.0"
+aws-sdk-bedrockruntime = "1.33.0"
 clap = { version = "4.5.53", features = ["derive"] }
 futures-util = "0.3.30"
 indicatif = { version = "0.17.8", features = ["tokio"] }
