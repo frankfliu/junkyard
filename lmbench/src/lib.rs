@@ -18,7 +18,18 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
-type JobResult = Result<(Vec<Duration>, usize, usize, usize, usize, usize), anyhow::Error>;
+type JobResult = Result<
+    (
+        Vec<Duration>,
+        Vec<Duration>,
+        usize,
+        usize,
+        usize,
+        usize,
+        usize,
+    ),
+    anyhow::Error,
+>;
 
 pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     let client = ClientWrapper::new(&cli).await?;
@@ -56,6 +67,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
             }
 
             let mut latencies = Vec::new();
+            let mut ttfts = Vec::new();
             let mut total_input_tokens = 0;
             let mut total_output_tokens = 0;
             let mut total_server_input_tokens = 0;
@@ -72,11 +84,15 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
                 match process_single_record(&client, &cli, &record, total_requests).await {
                     Ok((
                         duration,
+                        ttft,
                         benchmark_output_tokens,
                         server_input_tokens,
                         server_output_tokens,
                     )) => {
                         latencies.push(duration);
+                        if let Some(t) = ttft {
+                            (ttfts).push(t);
+                        }
                         total_output_tokens += benchmark_output_tokens;
                         total_server_input_tokens += server_input_tokens;
                         total_server_output_tokens += server_output_tokens;
@@ -92,6 +108,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
             }
             Ok((
                 latencies,
+                ttfts,
                 total_input_tokens,
                 total_output_tokens,
                 total_server_input_tokens,
@@ -111,6 +128,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     }
 
     let mut all_latencies = Vec::new();
+    let mut all_ttfts = Vec::new();
     let mut all_output_tokens = 0;
     let mut all_input_tokens = 0;
     let mut all_server_input_tokens = 0;
@@ -118,6 +136,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     let mut all_errors = 0;
     for (
         latencies,
+        ttfts,
         total_input_tokens,
         total_output_tokens,
         total_server_it,
@@ -126,6 +145,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     ) in results
     {
         all_latencies.extend(latencies);
+        all_ttfts.extend(ttfts);
         all_input_tokens += total_input_tokens;
         all_output_tokens += total_output_tokens;
         all_server_input_tokens += total_server_it;
@@ -135,6 +155,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
 
     let stats = generate_stats(
         &all_latencies,
+        &all_ttfts,
         all_input_tokens,
         all_output_tokens,
         all_server_input_tokens,
@@ -153,14 +174,14 @@ async fn process_single_record(
     cli: &Args,
     record: &Record,
     total_requests: u64,
-) -> Result<(Duration, usize, usize, usize), anyhow::Error> {
-    let start = Instant::now();
-    let (body_text, headers) = client.send_request(cli, record, total_requests).await?;
-    let duration = start.elapsed();
+) -> Result<(Duration, Option<Duration>, usize, usize, usize), anyhow::Error> {
+    let (body_text, headers, duration, ttft) =
+        client.send_request(cli, record, total_requests).await?;
 
     let mut benchmark_output_tokens = 0;
     let mut server_input_tokens = 0;
     let mut server_output_tokens = 0;
+    let mut ttft = Some(ttft);
     if cli.tokens {
         let (text_response, it, ot) = get_text_response(cli, &headers, &body_text);
         let token_count = count_text_tokens(&text_response);
@@ -201,10 +222,12 @@ async fn process_single_record(
             duration = duration.as_millis(),
             response = body_text,
         );
+        ttft = None;
     }
 
     Ok((
         duration,
+        ttft,
         benchmark_output_tokens,
         server_input_tokens,
         server_output_tokens,
