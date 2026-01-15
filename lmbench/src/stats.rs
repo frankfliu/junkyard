@@ -1,7 +1,9 @@
 use serde::Serialize;
+use serde_with::skip_serializing_none;
 use std::fmt;
 use std::time::Duration;
 
+#[skip_serializing_none]
 #[derive(Serialize, Debug)]
 pub struct Stats {
     pub success_requests: usize,
@@ -20,10 +22,10 @@ pub struct Stats {
     pub p90_ttft_ms: Option<u128>,
     pub p99_ttft_ms: Option<u128>,
     pub qps: f64,
-    pub total_output_tokens: usize,
-    pub output_tokens_per_second: f64,
-    pub total_input_tokens: usize,
-    pub input_tokens_per_second: f64,
+    pub total_output_tokens: Option<usize>,
+    pub output_tokens_per_second: Option<f64>,
+    pub total_input_tokens: Option<usize>,
+    pub input_tokens_per_second: Option<f64>,
     pub server_input_tokens: Option<usize>,
     pub server_output_tokens: Option<usize>,
 }
@@ -55,10 +57,10 @@ pub fn generate_stats(
             p90_ttft_ms: None,
             p99_ttft_ms: None,
             qps: 0.0,
-            total_output_tokens: 0,
-            output_tokens_per_second: 0.0,
-            total_input_tokens: 0,
-            input_tokens_per_second: 0.0,
+            total_output_tokens: None,
+            output_tokens_per_second: None,
+            total_input_tokens: None,
+            input_tokens_per_second: None,
             server_input_tokens: None,
             server_output_tokens: None,
         };
@@ -92,8 +94,21 @@ pub fn generate_stats(
             (None, None, None, None, None, None)
         };
     let qps = success_requests as f64 / total_time.as_secs_f64();
-    let output_tokens_per_second = total_output_tokens as f64 / total_time.as_secs_f64();
-    let input_tokens_per_second = total_input_tokens as f64 / total_time.as_secs_f64();
+    let (
+        total_output_tokens,
+        output_tokens_per_second,
+        total_input_tokens,
+        input_tokens_per_second,
+    ) = if total_output_tokens > 0 {
+        (
+            Some(total_output_tokens),
+            Some(total_output_tokens as f64 / total_time.as_secs_f64()),
+            Some(total_input_tokens),
+            Some(total_input_tokens as f64 / total_time.as_secs_f64()),
+        )
+    } else {
+        (None, None, None, None)
+    };
 
     let server_it = if server_input_tokens == 0 {
         None
@@ -183,8 +198,8 @@ mod tests {
         assert_eq!(stats.p90_latency_ms, 1000);
         assert_eq!(stats.p99_latency_ms, 1000);
         assert!((stats.qps - 1.8181).abs() < 0.0001);
-        assert!((stats.output_tokens_per_second - 181.8181).abs() < 0.0001);
-        assert!((stats.input_tokens_per_second - 90.9090).abs() < 0.0001);
+        assert!((stats.output_tokens_per_second.unwrap() - 181.8181).abs() < 0.0001);
+        assert!((stats.input_tokens_per_second.unwrap() - 90.9090).abs() < 0.0001);
 
         let expected_json = serde_json::to_string_pretty(&stats).unwrap();
         assert_eq!(stats.to_string(), format!("{}\n", expected_json));
@@ -218,9 +233,9 @@ mod tests {
         assert_eq!(stats.p90_latency_ms, 0);
         assert_eq!(stats.p99_latency_ms, 0);
         assert_eq!(stats.qps, 0.0);
-        assert_eq!(stats.total_output_tokens, 0);
-        assert_eq!(stats.output_tokens_per_second, 0.0);
-        assert_eq!(stats.total_input_tokens, 0);
-        assert_eq!(stats.input_tokens_per_second, 0.0);
+        assert_eq!(stats.total_output_tokens, None);
+        assert_eq!(stats.output_tokens_per_second, None);
+        assert_eq!(stats.total_input_tokens, None);
+        assert_eq!(stats.input_tokens_per_second, None);
     }
 }
