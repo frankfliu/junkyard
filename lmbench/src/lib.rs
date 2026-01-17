@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod args;
 pub mod client_wrapper;
 pub(crate) mod record;
@@ -129,8 +131,8 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
 
     let mut all_latencies = Vec::new();
     let mut all_ttfts = Vec::new();
-    let mut all_output_tokens = 0;
     let mut all_input_tokens = 0;
+    let mut all_output_tokens = 0;
     let mut all_server_input_tokens = 0;
     let mut all_server_output_tokens = 0;
     let mut all_errors = 0;

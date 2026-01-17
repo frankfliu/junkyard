@@ -4,37 +4,91 @@ use std::fmt;
 use std::time::Duration;
 
 #[skip_serializing_none]
+#[derive(Serialize, Debug, Default)]
+pub struct Distribution {
+    pub min: u128,
+    pub max: u128,
+    pub mean: u128,
+    pub p50: u128,
+    pub p90: u128,
+    pub p99: u128,
+}
+
+#[skip_serializing_none]
 #[derive(Serialize, Debug)]
 pub struct Stats {
     pub success_requests: usize,
     pub error_requests: usize,
     pub total_time_ms: u128,
-    pub avg_latency_ms: u128,
-    pub min_latency_ms: u128,
-    pub max_latency_ms: u128,
-    pub p50_latency_ms: u128,
-    pub p90_latency_ms: u128,
-    pub p99_latency_ms: u128,
-    pub avg_ttft_ms: Option<u128>,
-    pub min_ttft_ms: Option<u128>,
-    pub max_ttft_ms: Option<u128>,
-    pub p50_ttft_ms: Option<u128>,
-    pub p90_ttft_ms: Option<u128>,
-    pub p99_ttft_ms: Option<u128>,
+    pub latency_ms: Distribution,
+    pub ttft_ms: Option<Distribution>,
+
+    #[serde(with = "round_float")]
     pub qps: f64,
-    pub total_output_tokens: Option<usize>,
-    pub output_tokens_per_second: Option<f64>,
-    pub total_input_tokens: Option<usize>,
+    pub input_tokens: Option<usize>,
+    #[serde(skip)]
     pub input_tokens_per_second: Option<f64>,
+    pub output_tokens: Option<usize>,
+    #[serde(with = "round_option_float")]
+    pub output_tokens_per_second: Option<f64>,
     pub server_input_tokens: Option<usize>,
     pub server_output_tokens: Option<usize>,
+}
+
+mod round_float {
+    use serde::Serializer;
+
+    pub fn serialize<S>(decimal: &f64, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_f64((decimal * 10000.0).round() / 10000.0)
+    }
+}
+
+mod round_option_float {
+    use serde::Serializer;
+
+    pub fn serialize<S>(decimal: &Option<f64>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if let Some(decimal) = decimal {
+            serializer.serialize_f64((decimal * 10000.0).round() / 10000.0)
+        } else {
+            serializer.serialize_none()
+        }
+    }
+}
+
+fn get_distribution(durations: &[Duration]) -> Distribution {
+    let count = durations.len();
+    let mut sorted_durations = durations.to_vec();
+    sorted_durations.sort();
+
+    let total: Duration = sorted_durations.iter().sum();
+    let mean = total.as_millis() / count as u128;
+    let min = sorted_durations.first().unwrap().as_millis();
+    let max = sorted_durations.last().unwrap().as_millis();
+    let p50 = sorted_durations[count / 2].as_millis();
+    let p90 = sorted_durations[(count as f64 * 0.9) as usize].as_millis();
+    let p99 = sorted_durations[(count as f64 * 0.99) as usize].as_millis();
+
+    Distribution {
+        min,
+        max,
+        mean,
+        p50,
+        p90,
+        p99,
+    }
 }
 
 pub fn generate_stats(
     latencies: &[Duration],
     ttfts: &[Duration],
-    total_input_tokens: usize,
-    total_output_tokens: usize,
+    input_tokens: usize,
+    output_tokens: usize,
     server_input_tokens: usize,
     server_output_tokens: usize,
     error_requests: usize,
@@ -44,71 +98,41 @@ pub fn generate_stats(
             success_requests: 0,
             error_requests,
             total_time_ms: 0,
-            avg_latency_ms: 0,
-            min_latency_ms: 0,
-            max_latency_ms: 0,
-            p50_latency_ms: 0,
-            p90_latency_ms: 0,
-            p99_latency_ms: 0,
-            avg_ttft_ms: None,
-            min_ttft_ms: None,
-            max_ttft_ms: None,
-            p50_ttft_ms: None,
-            p90_ttft_ms: None,
-            p99_ttft_ms: None,
+            latency_ms: Distribution::default(),
+            ttft_ms: None,
             qps: 0.0,
-            total_output_tokens: None,
+            output_tokens: None,
             output_tokens_per_second: None,
-            total_input_tokens: None,
+            input_tokens: None,
             input_tokens_per_second: None,
             server_input_tokens: None,
             server_output_tokens: None,
         };
     }
 
-    let mut sorted_latencies = latencies.to_vec();
-    sorted_latencies.sort();
-
     let success_requests = latencies.len();
     let total_time: Duration = latencies.iter().sum();
     let total_time_ms = total_time.as_millis();
-    let avg_latency_ms = total_time_ms / success_requests as u128;
-    let min_latency_ms = sorted_latencies.first().unwrap().as_millis();
-    let max_latency_ms = sorted_latencies.last().unwrap().as_millis();
-    let p50_latency_ms = sorted_latencies[success_requests / 2].as_millis();
-    let p90_latency_ms = sorted_latencies[(success_requests as f64 * 0.9) as usize].as_millis();
-    let p99_latency_ms = sorted_latencies[(success_requests as f64 * 0.99) as usize].as_millis();
-    let (avg_ttft_ms, min_ttft_ms, max_ttft_ms, p50_ttft_ms, p90_ttft_ms, p99_ttft_ms) =
-        if !ttfts.is_empty() {
-            let mut sorted_ttfts = ttfts.to_vec();
-            sorted_ttfts.sort();
+
+    let latency_ms = get_distribution(latencies);
+    let ttft_ms = if !ttfts.is_empty() {
+        Some(get_distribution(ttfts))
+    } else {
+        None
+    };
+
+    let qps = success_requests as f64 / total_time.as_secs_f64();
+    let (input_tokens, input_tokens_per_second, output_tokens, output_tokens_per_second) =
+        if output_tokens > 0 {
             (
-                Some(total_time_ms / success_requests as u128),
-                Some(sorted_ttfts.first().unwrap().as_millis()),
-                Some(sorted_ttfts.last().unwrap().as_millis()),
-                Some(sorted_ttfts[success_requests / 2].as_millis()),
-                Some(sorted_ttfts[(success_requests as f64 * 0.9) as usize].as_millis()),
-                Some(sorted_ttfts[(success_requests as f64 * 0.99) as usize].as_millis()),
+                Some(input_tokens),
+                Some(input_tokens as f64 / total_time.as_secs_f64()),
+                Some(output_tokens),
+                Some(output_tokens as f64 / total_time.as_secs_f64()),
             )
         } else {
-            (None, None, None, None, None, None)
+            (None, None, None, None)
         };
-    let qps = success_requests as f64 / total_time.as_secs_f64();
-    let (
-        total_output_tokens,
-        output_tokens_per_second,
-        total_input_tokens,
-        input_tokens_per_second,
-    ) = if total_output_tokens > 0 {
-        (
-            Some(total_output_tokens),
-            Some(total_output_tokens as f64 / total_time.as_secs_f64()),
-            Some(total_input_tokens),
-            Some(total_input_tokens as f64 / total_time.as_secs_f64()),
-        )
-    } else {
-        (None, None, None, None)
-    };
 
     let server_it = if server_input_tokens == 0 {
         None
@@ -125,23 +149,13 @@ pub fn generate_stats(
         success_requests,
         error_requests,
         total_time_ms,
-        avg_latency_ms,
-        min_latency_ms,
-        max_latency_ms,
-        p50_latency_ms,
-        p90_latency_ms,
-        p99_latency_ms,
-        avg_ttft_ms,
-        min_ttft_ms,
-        max_ttft_ms,
-        p50_ttft_ms,
-        p90_ttft_ms,
-        p99_ttft_ms,
+        latency_ms,
+        ttft_ms,
         qps,
-        total_output_tokens,
-        output_tokens_per_second,
-        total_input_tokens,
+        input_tokens,
         input_tokens_per_second,
+        output_tokens,
+        output_tokens_per_second,
         server_input_tokens: server_it,
         server_output_tokens: server_ot,
     }
@@ -174,15 +188,15 @@ mod tests {
             Duration::from_millis(1000),
         ];
         let ttfts = vec![];
-        let total_input_tokens = 500;
-        let total_output_tokens = 1000;
+        let input_tokens = 500;
+        let output_tokens = 1000;
         let error_requests = 2;
 
         let stats = generate_stats(
             &latencies,
             &ttfts,
-            total_input_tokens,
-            total_output_tokens,
+            input_tokens,
+            output_tokens,
             0,
             0,
             error_requests,
@@ -191,15 +205,15 @@ mod tests {
         assert_eq!(stats.success_requests, 10);
         assert_eq!(stats.error_requests, 2);
         assert_eq!(stats.total_time_ms, 5500);
-        assert_eq!(stats.avg_latency_ms, 550);
-        assert_eq!(stats.min_latency_ms, 100);
-        assert_eq!(stats.max_latency_ms, 1000);
-        assert_eq!(stats.p50_latency_ms, 600);
-        assert_eq!(stats.p90_latency_ms, 1000);
-        assert_eq!(stats.p99_latency_ms, 1000);
+        assert_eq!(stats.latency_ms.mean, 550);
+        assert_eq!(stats.latency_ms.min, 100);
+        assert_eq!(stats.latency_ms.max, 1000);
+        assert_eq!(stats.latency_ms.p50, 600);
+        assert_eq!(stats.latency_ms.p90, 1000);
+        assert_eq!(stats.latency_ms.p99, 1000);
         assert!((stats.qps - 1.8181).abs() < 0.0001);
-        assert!((stats.output_tokens_per_second.unwrap() - 181.8181).abs() < 0.0001);
         assert!((stats.input_tokens_per_second.unwrap() - 90.9090).abs() < 0.0001);
+        assert!((stats.output_tokens_per_second.unwrap() - 181.8181).abs() < 0.0001);
 
         let expected_json = serde_json::to_string_pretty(&stats).unwrap();
         assert_eq!(stats.to_string(), format!("{}\n", expected_json));
@@ -209,15 +223,15 @@ mod tests {
     fn test_generate_stats_empty() {
         let latencies = vec![];
         let ttfts = vec![];
-        let total_input_tokens = 0;
-        let total_output_tokens = 0;
+        let input_tokens = 0;
+        let output_tokens = 0;
         let error_requests = 0;
 
         let stats = generate_stats(
             &latencies,
             &ttfts,
-            total_input_tokens,
-            total_output_tokens,
+            input_tokens,
+            output_tokens,
             0,
             0,
             error_requests,
@@ -226,16 +240,16 @@ mod tests {
         assert_eq!(stats.success_requests, 0);
         assert_eq!(stats.error_requests, 0);
         assert_eq!(stats.total_time_ms, 0);
-        assert_eq!(stats.avg_latency_ms, 0);
-        assert_eq!(stats.min_latency_ms, 0);
-        assert_eq!(stats.max_latency_ms, 0);
-        assert_eq!(stats.p50_latency_ms, 0);
-        assert_eq!(stats.p90_latency_ms, 0);
-        assert_eq!(stats.p99_latency_ms, 0);
+        assert_eq!(stats.latency_ms.mean, 0);
+        assert_eq!(stats.latency_ms.min, 0);
+        assert_eq!(stats.latency_ms.max, 0);
+        assert_eq!(stats.latency_ms.p50, 0);
+        assert_eq!(stats.latency_ms.p90, 0);
+        assert_eq!(stats.latency_ms.p99, 0);
         assert_eq!(stats.qps, 0.0);
-        assert_eq!(stats.total_output_tokens, None);
-        assert_eq!(stats.output_tokens_per_second, None);
-        assert_eq!(stats.total_input_tokens, None);
+        assert_eq!(stats.input_tokens, None);
         assert_eq!(stats.input_tokens_per_second, None);
+        assert_eq!(stats.output_tokens, None);
+        assert_eq!(stats.output_tokens_per_second, None);
     }
 }

@@ -59,7 +59,7 @@ async fn test_run_with_openai_mock() {
     openai_mock.assert();
 
     assert_eq!(stats.success_requests, 1);
-    assert_eq!(stats.total_output_tokens, Some(2));
+    assert_eq!(stats.output_tokens, Some(2));
 }
 
 #[tokio::test]
@@ -94,7 +94,7 @@ async fn test_run_with_openai_streaming_mock() {
     openai_mock.assert();
 
     assert_eq!(stats.success_requests, 1);
-    assert_eq!(stats.total_output_tokens, Some(2));
+    assert_eq!(stats.output_tokens, Some(2));
 }
 
 #[tokio::test]
@@ -136,7 +136,7 @@ async fn test_run_with_gemini_mock() {
     gemini_mock.assert();
 
     assert_eq!(stats.success_requests, 1);
-    assert_eq!(stats.total_output_tokens, Some(2));
+    assert_eq!(stats.output_tokens, Some(2));
 }
 
 #[tokio::test]
@@ -178,7 +178,7 @@ async fn test_run_with_gemini_streaming_mock() {
     gemini_mock.assert();
 
     assert_eq!(stats.success_requests, 1);
-    assert_eq!(stats.total_output_tokens, Some(2));
+    assert_eq!(stats.output_tokens, Some(2));
 }
 
 #[tokio::test]
@@ -214,7 +214,7 @@ async fn test_run_with_anthropic_mock() {
     anthropic_mock.assert();
 
     assert_eq!(stats.success_requests, 1);
-    assert_eq!(stats.total_output_tokens, Some(2));
+    assert_eq!(stats.output_tokens, Some(2));
 }
 
 #[tokio::test]
@@ -249,7 +249,7 @@ async fn test_run_with_anthropic_streaming_mock() {
     anthropic_mock.assert();
 
     assert_eq!(stats.success_requests, 1);
-    assert_eq!(stats.total_output_tokens, Some(2));
+    assert_eq!(stats.output_tokens, Some(2));
 }
 
 #[tokio::test]
@@ -281,7 +281,7 @@ async fn test_run_with_tgi_mock() {
     tgi_mock.assert();
 
     assert_eq!(stats.success_requests, 1);
-    assert_eq!(stats.total_output_tokens, Some(2));
+    assert_eq!(stats.output_tokens, Some(2));
 }
 
 #[tokio::test]
@@ -315,7 +315,7 @@ async fn test_run_with_tgi_streaming_mock() {
     tgi_mock.assert();
 
     assert_eq!(stats.success_requests, 1);
-    assert_eq!(stats.total_output_tokens, Some(2));
+    assert_eq!(stats.output_tokens, Some(2));
 }
 
 #[tokio::test]
@@ -352,7 +352,7 @@ async fn test_run_with_custom_jq() {
     triton_mock.assert();
 
     assert_eq!(stats.success_requests, 1);
-    assert_eq!(stats.total_output_tokens, Some(2));
+    assert_eq!(stats.output_tokens, Some(2));
 }
 
 #[tokio::test]
