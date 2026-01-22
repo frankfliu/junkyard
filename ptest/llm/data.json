@@ -12,7 +12,11 @@
       "gemini-2.5-pro"
     ],
     "features": [
-      "text"
+      "text",
+      "code_execution",
+      "function_calling",
+      "structured_outputs",
+      "url_content"
     ],
     "non_streaming": {
       "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/google/models/{{model}}:generateContent",
@@ -55,6 +59,384 @@
                 "tokenCount": 7
               }
             ]
+          },
+          "modelVersion": "{{model}}",
+          "responseId": "00000000"
+        }
+      },
+      "code_execution": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the sum of the first 50 prime numbers? Generate and run code for the calculation, and make sure you get all 50."
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "code_execution": {}
+            }
+          ]
+        },
+        "response": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "To find the sum of the first 50 prime numbers, I will generate prime numbers sequentially until I have collected 50 of them, and then I will sum them up.\n\nHere's the Python code to perform this calculation:\n\n"
+                  },
+                  {
+                    "executableCode": {
+                      "language": "PYTHON",
+                      "code": "def is_prime(n):\n    if n \u003c 2:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True\n\nprimes = []\nnum = 2\nwhile len(primes) \u003c 50:\n    if is_prime(num):\n        primes.append(num)\n    num += 1\n\nsum_of_primes = sum(primes)\n\nprint(f\"The first 50 prime numbers are: {primes}\")\nprint(f\"The count of prime numbers found: {len(primes)}\")\nprint(f\"The sum of the first 50 prime numbers is: {sum_of_primes}\")"
+                    }
+                  },
+                  {
+                    "codeExecutionResult": {
+                      "outcome": "OUTCOME_OK",
+                      "output": "The first 50 prime numbers are: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229]\nThe count of prime numbers found: 50\nThe sum of the first 50 prime numbers is: 5117\n"
+                    }
+                  },
+                  {
+                    "text": "The sum of the first 50 prime numbers is 5117."
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 31,
+            "candidatesTokenCount": 497,
+            "totalTokenCount": 1731,
+            "billablePromptUsage": {
+              "textCount": 96
+            },
+            "trafficType": "ON_DEMAND",
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 31
+              }
+            ],
+            "candidatesTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 497
+              }
+            ],
+            "toolUsePromptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 511
+              }
+            ],
+            "toolUsePromptTokenCount": 857,
+            "thoughtsTokenCount": 346
+          },
+          "modelVersion": "{{model}}",
+          "responseId": "00000000"
+        }
+      },
+      "function_calling": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the temperature in London?"
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "functionDeclarations": [
+                {
+                  "name": "get_current_temperature",
+                  "description": "Gets the current temperature for a given location.",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "location": {
+                        "type": "string",
+                        "description": "The city name, e.g. San Francisco"
+                      }
+                    },
+                    "required": [
+                      "location"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "response": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "functionCall": {
+                      "name": "get_current_temperature",
+                      "args": {
+                        "location": "London"
+                      }
+                    },
+                    "thoughtSignature": "Cq0CAY89a19IJQpHTEmbGD1XphDktd+Jr+KY0PYGNr99eMe/8GZlNPv14h497sxDi88IEg15+jYHSia+eD+zpgKHAIiPX7XTgCpXOLekm+d35DkkXaE5DZNUCzYHqNG/E4Ya88c7zEDu37OCZVQrvu9itkDe59irHUkGWYK2A1oqAGZEsxcTCF2WwAkAUT8JxBt3DDO4sBIbU26YBIA5z1KGRQaKLi9zMyytYbwqt/4NJ/jeovATlYozauXjEgGozw29lTHdq1bud/2hCNrHU4jW8cSzVs2UkMZo0tM+vZh9AlRzsrBzidme8K/E69kuryTQ0PpzFqH0Mov0zIGu6X6k/OkzG3ypecntTf1m9g8M38VZZxFCx8bMjRNIUmZ5aPvDt1n+ymtkz7Fja+j7tQ=="
+                  }
+                ]
+              },
+              "finishReason": "STOP",
+              "score": -11.464978218078613,
+              "avgLogprobs": -1.6378540311540877
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 35,
+            "candidatesTokenCount": 7,
+            "totalTokenCount": 102,
+            "billablePromptUsage": {
+              "textCount": 139
+            },
+            "trafficType": "ON_DEMAND",
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 35
+              }
+            ],
+            "candidatesTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 7
+              }
+            ],
+            "thoughtsTokenCount": 60
+          },
+          "modelVersion": "{{model}}",
+          "responseId": "00000000"
+        }
+      },
+      "structured_outputs": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Please moderate the following content and provide a decision.\nContent: ''Congratulations! You have won a free cruise to the Bahamas. Click here to claim your prize: www.definitely-not-a-scam.com''"
+                }
+              ]
+            }
+          ],
+          "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseJsonSchema": {
+              "type": "object",
+              "properties": {
+                "decision": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SpamDetails",
+                      "description": "Details for content classified as spam.",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "description": "The reason why the content is considered spam."
+                        },
+                        "spam_type": {
+                          "type": "string",
+                          "enum": [
+                            "phishing",
+                            "scam",
+                            "unsolicited promotion",
+                            "other"
+                          ],
+                          "description": "The type of spam."
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "spam_type"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "title": "NotSpamDetails",
+                      "description": "Details for content classified as not spam.",
+                      "properties": {
+                        "summary": {
+                          "type": "string",
+                          "description": "A brief summary of the content."
+                        },
+                        "is_safe": {
+                          "type": "boolean",
+                          "description": "Whether the content is safe for all audiences."
+                        }
+                      },
+                      "required": [
+                        "summary",
+                        "is_safe"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "decision"
+              ]
+            }
+          }
+        },
+        "response": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "{\n  \"decision\": {\n    \"reason\": \"The content falsely claims the recipient has won a prize (free cruise) and prompts them to click a suspicious link, which is a common tactic for scams or phishing attempts. The domain name itself is highly suspicious.\",\n    \"spam_type\": \"scam\"\n  }\n}"
+                  }
+                ]
+              },
+              "finishReason": "STOP",
+              "score": -124.30356597900391,
+              "avgLogprobs": -1.7507544504085057
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 45,
+            "candidatesTokenCount": 71,
+            "totalTokenCount": 466,
+            "billablePromptUsage": {
+              "textCount": 701
+            },
+            "trafficType": "ON_DEMAND",
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 45
+              }
+            ],
+            "candidatesTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 71
+              }
+            ],
+            "thoughtsTokenCount": 350
+          },
+          "modelVersion": "{{model}}",
+          "responseId": "00000000"
+        }
+      },
+      "url_content": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Compare the ingredients and cooking times from the recipes at https://www.foodnetwork.com/recipes/ina-garten/perfect-roast-chicken-recipe-1940592 and https://www.allrecipes.com/recipe/21151/simple-whole-roast-chicken/"
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "url_context": {}
+            }
+          ]
+        },
+        "response": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "Unfortunately, I was unable to access the recipe from Allrecipes.com."
+                  }
+                ]
+              },
+              "finishReason": "STOP",
+              "groundingMetadata": {
+                "groundingSupports": [
+                  {
+                    "segment": {
+                      "startIndex": 71,
+                      "endIndex": 174,
+                      "text": "Therefore, I can only provide details recipe from Food Network"
+                    },
+                    "groundingChunkIndices": [
+                      0
+                    ]
+                  },
+                  {
+                    "segment": {
+                      "startIndex": 782,
+                      "endIndex": 816,
+                      "text": "*   Total time: 2 hours 10 minutes"
+                    },
+                    "groundingChunkIndices": [
+                      0
+                    ]
+                  }
+                ]
+              },
+              "urlContextMetadata": {
+                "urlMetadata": [
+                  {
+                    "retrievedUrl": "https://www.allrecipes.com/recipe/21151/simple-whole-roast-chicken/",
+                    "urlRetrievalStatus": "URL_RETRIEVAL_STATUS_ERROR"
+                  },
+                  {
+                    "retrievedUrl": "https://www.foodnetwork.com/recipes/ina-garten/perfect-roast-chicken-recipe-1940592",
+                    "urlRetrievalStatus": "URL_RETRIEVAL_STATUS_SUCCESS"
+                  }
+                ]
+              }
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 68,
+            "candidatesTokenCount": 229,
+            "totalTokenCount": 3581,
+            "billablePromptUsage": {
+              "textCount": 205
+            },
+            "trafficType": "ON_DEMAND",
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 68
+              }
+            ],
+            "candidatesTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 229
+              }
+            ],
+            "toolUsePromptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 3153
+              }
+            ],
+            "toolUsePromptTokenCount": 3187,
+            "thoughtsTokenCount": 97
           },
           "modelVersion": "{{model}}",
           "responseId": "00000000"
@@ -131,6 +513,392 @@
                   "tokenCount": 7
                 }
               ]
+            },
+            "modelVersion": "{{model}}",
+            "responseId": "00000000"
+          }
+        ]
+      },
+      "code_execution": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the sum of the first 50 prime numbers? Generate and run code for the calculation, and make sure you get all 50."
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "code_execution": {}
+            }
+          ]
+        },
+        "response": [
+          {
+            "candidates": [
+              {
+                "content": {
+                  "role": "model",
+                  "parts": [
+                    {
+                      "text": "To find the sum of the first 50 prime numbers, I will generate prime numbers sequentially until I have collected 50 of them, and then I will sum them up.\n\nHere's the Python code to perform this calculation:\n\n"
+                    },
+                    {
+                      "executableCode": {
+                        "language": "PYTHON",
+                        "code": "def is_prime(n):\n    if n \u003c 2:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True\n\nprimes = []\nnum = 2\nwhile len(primes) \u003c 50:\n    if is_prime(num):\n        primes.append(num)\n    num += 1\n\nsum_of_primes = sum(primes)\n\nprint(f\"The first 50 prime numbers are: {primes}\")\nprint(f\"The count of prime numbers found: {len(primes)}\")\nprint(f\"The sum of the first 50 prime numbers is: {sum_of_primes}\")"
+                      }
+                    },
+                    {
+                      "codeExecutionResult": {
+                        "outcome": "OUTCOME_OK",
+                        "output": "The first 50 prime numbers are: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229]\nThe count of prime numbers found: 50\nThe sum of the first 50 prime numbers is: 5117\n"
+                      }
+                    },
+                    {
+                      "text": "The sum of the first 50 prime numbers is 5117."
+                    }
+                  ]
+                },
+                "finishReason": "STOP"
+              }
+            ],
+            "usageMetadata": {
+              "promptTokenCount": 31,
+              "candidatesTokenCount": 497,
+              "totalTokenCount": 1731,
+              "billablePromptUsage": {
+                "textCount": 96
+              },
+              "trafficType": "ON_DEMAND",
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 31
+                }
+              ],
+              "candidatesTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 497
+                }
+              ],
+              "toolUsePromptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 511
+                }
+              ],
+              "toolUsePromptTokenCount": 857,
+              "thoughtsTokenCount": 346
+            },
+            "modelVersion": "{{model}}",
+            "responseId": "00000000"
+          }
+        ]
+      },
+      "function_calling": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the temperature in London?"
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "functionDeclarations": [
+                {
+                  "name": "get_current_temperature",
+                  "description": "Gets the current temperature for a given location.",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "location": {
+                        "type": "string",
+                        "description": "The city name, e.g. San Francisco"
+                      }
+                    },
+                    "required": [
+                      "location"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "response": [
+          {
+            "candidates": [
+              {
+                "content": {
+                  "role": "model",
+                  "parts": [
+                    {
+                      "functionCall": {
+                        "name": "get_current_temperature",
+                        "args": {
+                          "location": "London"
+                        }
+                      },
+                      "thoughtSignature": "Cq0CAY89a19IJQpHTEmbGD1XphDktd+Jr+KY0PYGNr99eMe/8GZlNPv14h497sxDi88IEg15+jYHSia+eD+zpgKHAIiPX7XTgCpXOLekm+d35DkkXaE5DZNUCzYHqNG/E4Ya88c7zEDu37OCZVQrvu9itkDe59irHUkGWYK2A1oqAGZEsxcTCF2WwAkAUT8JxBt3DDO4sBIbU26YBIA5z1KGRQaKLi9zMyytYbwqt/4NJ/jeovATlYozauXjEgGozw29lTHdq1bud/2hCNrHU4jW8cSzVs2UkMZo0tM+vZh9AlRzsrBzidme8K/E69kuryTQ0PpzFqH0Mov0zIGu6X6k/OkzG3ypecntTf1m9g8M38VZZxFCx8bMjRNIUmZ5aPvDt1n+ymtkz7Fja+j7tQ=="
+                    }
+                  ]
+                },
+                "finishReason": "STOP",
+                "score": -11.464978218078613,
+                "avgLogprobs": -1.6378540311540877
+              }
+            ],
+            "usageMetadata": {
+              "promptTokenCount": 35,
+              "candidatesTokenCount": 7,
+              "totalTokenCount": 102,
+              "billablePromptUsage": {
+                "textCount": 139
+              },
+              "trafficType": "ON_DEMAND",
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 35
+                }
+              ],
+              "candidatesTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 7
+                }
+              ],
+              "thoughtsTokenCount": 60
+            },
+            "modelVersion": "{{model}}",
+            "responseId": "00000000"
+          }
+        ]
+      },
+      "structured_outputs": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Please moderate the following content and provide a decision.\nContent: ''Congratulations! You have won a free cruise to the Bahamas. Click here to claim your prize: www.definitely-not-a-scam.com''"
+                }
+              ]
+            }
+          ],
+          "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseJsonSchema": {
+              "type": "object",
+              "properties": {
+                "decision": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "title": "SpamDetails",
+                      "description": "Details for content classified as spam.",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "description": "The reason why the content is considered spam."
+                        },
+                        "spam_type": {
+                          "type": "string",
+                          "enum": [
+                            "phishing",
+                            "scam",
+                            "unsolicited promotion",
+                            "other"
+                          ],
+                          "description": "The type of spam."
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "spam_type"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "title": "NotSpamDetails",
+                      "description": "Details for content classified as not spam.",
+                      "properties": {
+                        "summary": {
+                          "type": "string",
+                          "description": "A brief summary of the content."
+                        },
+                        "is_safe": {
+                          "type": "boolean",
+                          "description": "Whether the content is safe for all audiences."
+                        }
+                      },
+                      "required": [
+                        "summary",
+                        "is_safe"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "decision"
+              ]
+            }
+          }
+        },
+        "response": [
+          {
+            "candidates": [
+              {
+                "content": {
+                  "role": "model",
+                  "parts": [
+                    {
+                      "text": "{\n  \"decision\": {\n    \"reason\": \"The content falsely claims the recipient has won a prize (free cruise) and prompts them to click a suspicious link, which is a common tactic for scams or phishing attempts. The domain name itself is highly suspicious.\",\n    \"spam_type\": \"scam\"\n  }\n}"
+                    }
+                  ]
+                },
+                "finishReason": "STOP",
+                "score": -124.30356597900391,
+                "avgLogprobs": -1.7507544504085057
+              }
+            ],
+            "usageMetadata": {
+              "promptTokenCount": 45,
+              "candidatesTokenCount": 71,
+              "totalTokenCount": 466,
+              "billablePromptUsage": {
+                "textCount": 701
+              },
+              "trafficType": "ON_DEMAND",
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 45
+                }
+              ],
+              "candidatesTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 71
+                }
+              ],
+              "thoughtsTokenCount": 350
+            },
+            "modelVersion": "{{model}}",
+            "responseId": "00000000"
+          }
+        ]
+      },
+      "url_content": {
+        "request": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Compare the ingredients and cooking times from the recipes at https://www.foodnetwork.com/recipes/ina-garten/perfect-roast-chicken-recipe-1940592 and https://www.allrecipes.com/recipe/21151/simple-whole-roast-chicken/"
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "url_context": {}
+            }
+          ]
+        },
+        "response": [
+          {
+            "candidates": [
+              {
+                "content": {
+                  "role": "model",
+                  "parts": [
+                    {
+                      "text": "Unfortunately, I was unable to access the recipe from Allrecipes.com."
+                    }
+                  ]
+                },
+                "finishReason": "STOP",
+                "groundingMetadata": {
+                  "groundingSupports": [
+                    {
+                      "segment": {
+                        "startIndex": 71,
+                        "endIndex": 174,
+                        "text": "Therefore, I can only provide details recipe from Food Network"
+                      },
+                      "groundingChunkIndices": [
+                        0
+                      ]
+                    },
+                    {
+                      "segment": {
+                        "startIndex": 782,
+                        "endIndex": 816,
+                        "text": "*   Total time: 2 hours 10 minutes"
+                      },
+                      "groundingChunkIndices": [
+                        0
+                      ]
+                    }
+                  ]
+                },
+                "urlContextMetadata": {
+                  "urlMetadata": [
+                    {
+                      "retrievedUrl": "https://www.allrecipes.com/recipe/21151/simple-whole-roast-chicken/",
+                      "urlRetrievalStatus": "URL_RETRIEVAL_STATUS_ERROR"
+                    },
+                    {
+                      "retrievedUrl": "https://www.foodnetwork.com/recipes/ina-garten/perfect-roast-chicken-recipe-1940592",
+                      "urlRetrievalStatus": "URL_RETRIEVAL_STATUS_SUCCESS"
+                    }
+                  ]
+                }
+              }
+            ],
+            "usageMetadata": {
+              "promptTokenCount": 68,
+              "candidatesTokenCount": 229,
+              "totalTokenCount": 3581,
+              "billablePromptUsage": {
+                "textCount": 205
+              },
+              "trafficType": "ON_DEMAND",
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 68
+                }
+              ],
+              "candidatesTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 229
+                }
+              ],
+              "toolUsePromptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 3153
+                }
+              ],
+              "toolUsePromptTokenCount": 3187,
+              "thoughtsTokenCount": 97
             },
             "modelVersion": "{{model}}",
             "responseId": "00000000"

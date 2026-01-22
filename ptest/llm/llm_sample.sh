@@ -97,6 +97,12 @@ if [ "$USE_VERTEX" = true ]; then
     -H \"Content-Type: application/json\" \\
     -H \"anthropic-beta: computer-use-2025-01-24\" \\
     -d "
+  elif [ "$FEATURE" = "memory" ] && [ "$PROVIDER" = "anthropic" ]; then
+    CURL_TEMPLATE="curl \"$VERTEX_URL\" \\
+    -H \"Authorization: Bearer \$(gcloud auth print-access-token)\" \\
+    -H \"Content-Type: application/json\" \\
+    -H \"anthropic-beta: context-management-2025-06-27\" \\
+    -d "
   else
     CURL_TEMPLATE="curl \"$VERTEX_URL\" \\
     -H \"Authorization: Bearer \$(gcloud auth print-access-token)\" \\
