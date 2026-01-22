@@ -42,17 +42,24 @@
             </select>
         </div>
         <div class="col-md-4">
+            <label for="feature-select" class="form-label">Feature</label>
+            <select id="feature-select" class="form-select">
+            </select>
+        </div>
+    </div>
+    <div class="row mb-4">
+        <div class="col-md-4">
             <div class="form-check form-switch mt-4">
-                <input class="form-check-input" type="checkbox" role="switch" id="use-vertex-checkbox">
+                <input class="form-check-input" type="checkbox" role="switch" id="use-vertex-checkbox" checked>
                 <label class="form-check-label" for="use-vertex-checkbox">Use Vertex AI</label>
             </div>
         </div>
     </div>
 
-    <div id="vertex-options" class="row mb-4 d-none">
+    <div id="vertex-options" class="row mb-4">
         <div class="col-md-6">
             <label for="project-input" class="form-label">Project</label>
-            <input type="text" id="project-input" class="form-control" placeholder="gcp-project-id">
+            <input type="text" id="project-input" class="form-control" placeholder="gcp-project-id" value="$PROJECT">
         </div>
         <div class="col-md-6">
             <label for="region-select" class="form-label">Region</label>
@@ -98,6 +105,9 @@
       "gemini-2.5-flash-lite",
       "gemini-2.5-flash",
       "gemini-2.5-pro"
+    ],
+    "features": [
+      "text"
     ],
     "non_streaming": {
       "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/google/models/{{model}}:generateContent",
@@ -230,9 +240,162 @@
       "claude-sonnet-4-5@20250929",
       "claude-opus-4-5@20251101"
     ],
+    "features": [
+      "text",
+      "bash",
+      "computer_use",
+      "memory",
+      "text_editor",
+      "web_search"
+    ],
     "non_streaming": {
       "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/anthropic/models/{{model}}:rawPredict",
       "curl": "curl \\"https://api.anthropic.com/v1/messages\\" \\\\\\n  -H \\"x-api-key: $ANTHROPIC_API_KEY\\" \\\\\\n  -H \\"anthropic-version: 2023-06-01\\" \\\\\\n  -H \\"content-type: application/json\\" \\\\\\n  -d ",
+      "bash": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "List all Python files in the current directory."
+            }
+          ],
+          "tools": [
+            {
+              "type": "bash_20250124",
+              "name": "bash"
+            }
+          ]
+        },
+        "response": {
+          "model": "{{model}}",
+          "id": "msg_000001",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_00001",
+              "name": "bash",
+              "input": {
+                "command": "ls -la *.py 2>/dev/null || echo 'No Python files found in the current directory'"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 756,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 74
+          }
+        }
+      },
+      "computer_use": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Save a picture of a cat to my desktop."
+            }
+          ],
+          "tools": [
+            {
+              "type": "computer_20250124",
+              "name": "computer",
+              "display_width_px": 1024,
+              "display_height_px": 768,
+              "display_number": 1
+            }
+          ]
+        },
+        "response": {
+          "model": "{{model}}",
+          "id": "msg_000001",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_0001",
+              "name": "computer",
+              "input": {
+                "action": "screenshot"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1842,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 51
+          }
+        }
+      },
+      "memory": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Remember that my favorite color is blue."
+            }
+          ],
+          "tools": [
+            {
+              "type": "memory_20250818",
+              "name": "memory"
+            }
+          ]
+        },
+        "response": {
+          "model": "{{model}}",
+          "id": "msg_000001",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_0001",
+              "name": "memory",
+              "input": {
+                "command": "view",
+                "path": "/memories"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1580,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 69
+          },
+          "context_management": {
+            "applied_edits": []
+          }
+        }
+      },
       "text": {
         "request": {
           "model": "{{model}}",
@@ -268,11 +431,169 @@
             "output_tokens": 10
           }
         }
+      },
+      "text_editor": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "There is a syntax error in primes.py file. Can you help me fix it?"
+            }
+          ],
+          "tools": [
+            {
+              "type": "text_editor_20250728",
+              "name": "str_replace_based_edit_tool",
+              "max_characters": 10000
+            }
+          ]
+        },
+        "response": {
+          "model": "{{model}}",
+          "id": "msg_000001",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "I'll help you fix the syntax error in the primes.py file. Let me first view the file to identify the issue."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_0001",
+              "name": "str_replace_based_edit_tool",
+              "input": {
+                "command": "view",
+                "path": "/repo"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1286,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 105
+          }
+        }
+      },
+      "web_search": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "What is the capital of France?"
+            }
+          ],
+          "tools": [
+            {
+              "type": "web_search_20250305",
+              "name": "web_search",
+              "max_uses": 5
+            }
+          ]
+        },
+        "response": {
+          "model": "{{model}}",
+          "id": "msg_000001",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The capital of France is Paris."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 2220,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 10
+          }
+        }
       }
     },
     "streaming": {
       "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/anthropic/models/{{model}}:streamRawPredict",
       "curl": "curl \\"https://api.anthropic.com/v1/messages\\" \\\\\\n  -H \\"x-api-key: $ANTHROPIC_API_KEY\\" \\\\\\n  -H \\"anthropic-version: 2023-06-01\\" \\\\\\n  -H \\"content-type: application/json\\" \\\\\\n  -d ",
+      "bash": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "List all Python files in the current directory."
+            }
+          ],
+          "tools": [
+            {
+              "type": "bash_20250124",
+              "name": "bash"
+            }
+          ],
+          "stream": true
+        },
+        "response": "event: message_start\\ndata: {\\"type\\":\\"message_start\\",\\"message\\":{\\"model\\":\\"claude-sonnet-4-5-20250929\\",\\"id\\":\\"msg_vrtx_01Tuv7VFiiZwWFmhT7XGaQQV\\",\\"type\\":\\"message\\",\\"role\\":\\"assistant\\",\\"content\\":[],\\"stop_reason\\":null,\\"stop_sequence\\":null,\\"usage\\":{\\"input_tokens\\":756,\\"cache_creation_input_tokens\\":0,\\"cache_read_input_tokens\\":0,\\"cache_creation\\":{\\"ephemeral_5m_input_tokens\\":0,\\"ephemeral_1h_input_tokens\\":0},\\"output_tokens\\":1}}        }\\n\\nevent: ping\\ndata: {\\"type\\": \\"ping\\"}\\n\\nevent: content_block_start\\ndata: {\\"type\\":\\"content_block_start\\",\\"index\\":0,\\"content_block\\":{\\"type\\":\\"tool_use\\",\\"id\\":\\"toolu_0001\\",\\"name\\":\\"bash\\",\\"input\\":{}}         }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"\\"}          }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"{\\\\\\"command\\\\\\":\\"}         }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\" \\\\\\"ls -la \\"}  }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"*.py\\"}  }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\" 2>/dev\\"}           }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"/null || e\\"}   }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"ch\\"}        }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"o \\\\\\\\\\\\\\"No Py\\"} }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"thon files f\\"}      }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"ound in c\\"}             }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"urrent \\"} }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"director\\"}   }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"y\\\\\\\\\\\\\\"\\\\\\"}\\"}}\\n\\nevent: content_block_stop\\ndata: {\\"type\\":\\"content_block_stop\\",\\"index\\":0          }\\n\\nevent: message_delta\\ndata: {\\"type\\":\\"message_delta\\",\\"delta\\":{\\"stop_reason\\":\\"tool_use\\",\\"stop_sequence\\":null},\\"usage\\":{\\"output_tokens\\":73} }\\n\\nevent: message_stop\\ndata: {\\"type\\":\\"message_stop\\"       }\\n\\n"
+      },
+      "computer_use": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Save a picture of a cat to my desktop."
+            }
+          ],
+          "tools": [
+            {
+              "type": "computer_20250124",
+              "name": "computer",
+              "display_width_px": 1024,
+              "display_height_px": 768,
+              "display_number": 1
+            }
+          ],
+          "stream": true
+        },
+        "response": "event: message_start\\ndata: {\\"type\\":\\"message_start\\",\\"message\\":{\\"model\\":\\"claude-opus-4-5-20251101\\",\\"id\\":\\"msg_vrtx_01WyNcZs1r3PUd3gt2a9GieF\\",\\"type\\":\\"message\\",\\"role\\":\\"assistant\\",\\"content\\":[],\\"stop_reason\\":null,\\"stop_sequence\\":null,\\"usage\\":{\\"input_tokens\\":1842,\\"cache_creation_input_tokens\\":0,\\"cache_read_input_tokens\\":0,\\"cache_creation\\":{\\"ephemeral_5m_input_tokens\\":0,\\"ephemeral_1h_input_tokens\\":0},\\"output_tokens\\":1}}    }\\n\\nevent: ping\\ndata: {\\"type\\": \\"ping\\"}\\n\\nevent: content_block_start\\ndata: {\\"type\\":\\"content_block_start\\",\\"index\\":0,\\"content_block\\":{\\"type\\":\\"tool_use\\",\\"id\\":\\"toolu_vrtx_01WzhF1SepcFN3rTUp2KjoKP\\",\\"name\\":\\"computer\\",\\"input\\":{}}           }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"\\"}             }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"{\\\\\\"ac\\"}           }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"ti\\"}            }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"on\\\\\\":\\"} }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\" \\\\\\"screen\\"}          }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"shot\\\\\\"}\\"}  }\\n\\nevent: content_block_stop\\ndata: {\\"type\\":\\"content_block_stop\\",\\"index\\":0     }\\n\\nevent: message_delta\\ndata: {\\"type\\":\\"message_delta\\",\\"delta\\":{\\"stop_reason\\":\\"tool_use\\",\\"stop_sequence\\":null},\\"usage\\":{\\"output_tokens\\":51}            }\\n\\nevent: message_stop\\ndata: {\\"type\\":\\"message_stop\\"   }\\n\\n"
+      },
+      "memory": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Remember that my favorite color is blue."
+            }
+          ],
+          "tools": [
+            {
+              "type": "memory_20250818",
+              "name": "memory"
+            }
+          ],
+          "stream": true
+        },
+        "response": "event: message_start\\ndata: {\\"type\\":\\"message_start\\",\\"message\\":{\\"model\\":\\"claude-sonnet-4-5-20250929\\",\\"id\\":\\"msg_vrtx_01D4WWDA2KWEaUwwEpi6vTQw\\",\\"type\\":\\"message\\",\\"role\\":\\"assistant\\",\\"content\\":[],\\"stop_reason\\":null,\\"stop_sequence\\":null,\\"usage\\":{\\"input_tokens\\":1580,\\"cache_creation_input_tokens\\":0,\\"cache_read_input_tokens\\":0,\\"cache_creation\\":{\\"ephemeral_5m_input_tokens\\":0,\\"ephemeral_1h_input_tokens\\":0},\\"output_tokens\\":1}}            }\\n\\nevent: ping\\ndata: {\\"type\\": \\"ping\\"}\\n\\nevent: content_block_start\\ndata: {\\"type\\":\\"content_block_start\\",\\"index\\":0,\\"content_block\\":{\\"type\\":\\"tool_use\\",\\"id\\":\\"toolu_vrtx_01DSVLJ6FwL8Fr8qFUJFsAJ2\\",\\"name\\":\\"memory\\",\\"input\\":{}}     }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"\\"}          }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"{\\\\\\"command\\"}        }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"\\\\\\": \\\\\\"v\\"}    }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"iew\\\\\\"\\"}            }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\", \\\\\\"path\\\\\\"\\"}             }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\": \\\\\\"/\\"}  }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"memories\\\\\\"}\\"}      }\\n\\nevent: content_block_stop\\ndata: {\\"type\\":\\"content_block_stop\\",\\"index\\":0          }\\n\\nevent: message_delta\\ndata: {\\"type\\":\\"message_delta\\",\\"delta\\":{\\"stop_reason\\":\\"tool_use\\",\\"stop_sequence\\":null},\\"usage\\":{\\"output_tokens\\":69},\\"context_management\\":{\\"applied_edits\\":[]}     }\\n\\nevent: message_stop\\ndata: {\\"type\\":\\"message_stop\\"    }\\n\\n"
+      },
       "text": {
         "request": {
           "model": "{{model}}",
@@ -286,6 +607,48 @@
           "stream": true
         },
         "response": "event: message_start\\ndata: {\\"type\\":\\"message_start\\",\\"message\\":{\\"model\\":\\"{{model}}\\",\\"id\\":\\"msg_000001\\",\\"type\\":\\"message\\",\\"role\\":\\"assistant\\",\\"content\\":[],\\"stop_reason\\":null,\\"stop_sequence\\":null,\\"usage\\":{\\"input_tokens\\":14,\\"cache_creation_input_tokens\\":0,\\"cache_read_input_tokens\\":0,\\"cache_creation\\":{\\"ephemeral_5m_input_tokens\\":0,\\"ephemeral_1h_input_tokens\\":0},\\"output_tokens\\":7}}}\\n\\nevent: ping\\ndata: {\\"type\\": \\"ping\\"}\\n\\nevent: content_block_start\\ndata: {\\"type\\":\\"content_block_start\\",\\"index\\":0,\\"content_block\\":{\\"type\\":\\"text\\",\\"text\\":\\"\\"}      }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"text_delta\\",\\"text\\":\\"The capital of France is Paris.\\"}        }\\n\\nevent: content_block_stop\\ndata: {\\"type\\":\\"content_block_stop\\",\\"index\\":0              }\\n\\nevent: message_delta\\ndata: {\\"type\\":\\"message_delta\\",\\"delta\\":{\\"stop_reason\\":\\"end_turn\\",\\"stop_sequence\\":null},\\"usage\\":{\\"output_tokens\\":10}     }\\n\\nevent: message_stop\\ndata: {\\"type\\":\\"message_stop\\"             }\\n"
+      },
+      "text_editor": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "There is a syntax error in primes.py file. Can you help me fix it?"
+            }
+          ],
+          "tools": [
+            {
+              "type": "text_editor_20250728",
+              "name": "str_replace_based_edit_tool",
+              "max_characters": 10000
+            }
+          ],
+          "stream": true
+        },
+        "response": "event: message_start\\ndata: {\\"type\\":\\"message_start\\",\\"message\\":{\\"model\\":\\"claude-sonnet-4-5-20250929\\",\\"id\\":\\"msg_vrtx_01J4K66eoHMcMhwiHMTmT8E5\\",\\"type\\":\\"message\\",\\"role\\":\\"assistant\\",\\"content\\":[],\\"stop_reason\\":null,\\"stop_sequence\\":null,\\"usage\\":{\\"input_tokens\\":1286,\\"cache_creation_input_tokens\\":0,\\"cache_read_input_tokens\\":0,\\"cache_creation\\":{\\"ephemeral_5m_input_tokens\\":0,\\"ephemeral_1h_input_tokens\\":0},\\"output_tokens\\":8}}          }\\n\\nevent: ping\\ndata: {\\"type\\": \\"ping\\"}\\n\\nevent: content_block_start\\ndata: {\\"type\\":\\"content_block_start\\",\\"index\\":0,\\"content_block\\":{\\"type\\":\\"text\\",\\"text\\":\\"\\"}             }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"text_delta\\",\\"text\\":\\"I'll help you fix the syntax error\\"}           }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"text_delta\\",\\"text\\":\\" in the primes.py file.\\"}}\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"text_delta\\",\\"text\\":\\" Let me first view\\"}   }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"text_delta\\",\\"text\\":\\" the file to identify the issue.\\"}    }\\n\\nevent: content_block_stop\\ndata: {\\"type\\":\\"content_block_stop\\",\\"index\\":0      }\\n\\nevent: content_block_start\\ndata: {\\"type\\":\\"content_block_start\\",\\"index\\":1,\\"content_block\\":{\\"type\\":\\"tool_use\\",\\"id\\":\\"toolu_vrtx_0178uL83Zb4FwHJa4SdCGLfV\\",\\"name\\":\\"str_replace_based_edit_tool\\",\\"input\\":{}}            }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":1,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"\\"}      }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":1,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"{\\\\\\"\\"}            }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":1,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"comman\\"}        }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":1,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"d\\\\\\": \\\\\\"view\\\\\\"\\"}               }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":1,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\", \\\\\\"path\\"}     }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":1,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\"\\\\\\":\\"}}\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":1,\\"delta\\":{\\"type\\":\\"input_json_delta\\",\\"partial_json\\":\\" \\\\\\"/repo\\\\\\"}\\"}             }\\n\\nevent: content_block_stop\\ndata: {\\"type\\":\\"content_block_stop\\",\\"index\\":1}\\n\\nevent: message_delta\\ndata: {\\"type\\":\\"message_delta\\",\\"delta\\":{\\"stop_reason\\":\\"tool_use\\",\\"stop_sequence\\":null},\\"usage\\":{\\"output_tokens\\":105} }\\n\\nevent: message_stop\\ndata: {\\"type\\":\\"message_stop\\"     }\\n\\n"
+      },
+      "web_search": {
+        "request": {
+          "model": "{{model}}",
+          "max_tokens": 1024,
+          "messages": [
+            {
+              "role": "user",
+              "content": "What is the capital of France?"
+            }
+          ],
+          "tools": [
+            {
+              "type": "web_search_20250305",
+              "name": "web_search",
+              "max_uses": 5
+            }
+          ],
+          "stream": true
+        },
+        "response": "event: message_start\\ndata: {\\"type\\":\\"message_start\\",\\"message\\":{\\"model\\":\\"{{model}}\\",\\"id\\":\\"msg_000001\\",\\"type\\":\\"message\\",\\"role\\":\\"assistant\\",\\"content\\":[],\\"stop_reason\\":null,\\"stop_sequence\\":null,\\"usage\\":{\\"input_tokens\\":2220,\\"cache_creation_input_tokens\\":0,\\"cache_read_input_tokens\\":0,\\"cache_creation\\":{\\"ephemeral_5m_input_tokens\\":0,\\"ephemeral_1h_input_tokens\\":0},\\"output_tokens\\":1}}               }\\n\\nevent: ping\\ndata: {\\"type\\": \\"ping\\"}\\n\\nevent: content_block_start\\ndata: {\\"type\\":\\"content_block_start\\",\\"index\\":0,\\"content_block\\":{\\"type\\":\\"text\\",\\"text\\":\\"\\"}             }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"text_delta\\",\\"text\\":\\"The\\"}            }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"text_delta\\",\\"text\\":\\" capital of France is Paris\\"}              }\\n\\nevent: content_block_delta\\ndata: {\\"type\\":\\"content_block_delta\\",\\"index\\":0,\\"delta\\":{\\"type\\":\\"text_delta\\",\\"text\\":\\".\\"}             }\\n\\nevent: content_block_stop\\ndata: {\\"type\\":\\"content_block_stop\\",\\"index\\":0               }\\n\\nevent: message_delta\\ndata: {\\"type\\":\\"message_delta\\",\\"delta\\":{\\"stop_reason\\":\\"end_turn\\",\\"stop_sequence\\":null},\\"usage\\":{\\"input_tokens\\":2220,\\"cache_creation_input_tokens\\":0,\\"cache_read_input_tokens\\":0,\\"output_tokens\\":10}  }\\n\\nevent: message_stop\\ndata: {\\"type\\":\\"message_stop\\"               }\\n\\n"
       }
     }
   },
@@ -303,6 +666,9 @@
       "qwen/qwen3-coder-480b-a35b-instruct-maas",
       "qwen/qwen3-next-80b-a3b-instruct-maas",
       "qwen/qwen3-next-80b-a3b-thinking-maas"
+    ],
+    "features": [
+      "text"
     ],
     "non_streaming": {
       "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/endpoints/openapi/chat/completions",
@@ -369,6 +735,9 @@
     "models": [
       "llama-2-7b-chat"
     ],
+    "features": [
+      "text"
+    ],
     "non_streaming": {
       "url": "https://{{region}}-aiplatform.googleapis.com/v1/projects/{{project}}/locations/{{region}}/publishers/meta-llama/models/{{model}}:rawPredict",
       "curl": "curl \\"https://api-inference.huggingface.co/models/meta-llama/{{model}}\\" \\\\\\n  -H \\"Content-Type: application/json\\" \\\\\\n  -H \\"Authorization: Bearer $HUGGINGFACE_API_KEY\\" \\\\\\n  -d ",
@@ -401,12 +770,12 @@
       }
     }
   }
-}
-`;
+}`;
     const data = JSON.parse(json);
 
     const providerSelect = document.getElementById('provider-select');
     const modelSelect = document.getElementById('model-select');
+    const featureSelect = document.getElementById('feature-select');
     const useVertexCheckbox = document.getElementById('use-vertex-checkbox');
     const vertexOptions = document.getElementById('vertex-options');
     const projectInput = document.getElementById('project-input');
@@ -418,7 +787,14 @@
         const provider = providerSelect.value;
         const models = data[provider].models;
         modelSelect.innerHTML = models.map(model => `<option value="${model}">${model}</option>`).join('');
+        updateFeatures();
         updateContent();
+    }
+
+    function updateFeatures() {
+        const provider = providerSelect.value;
+        const features = data[provider].features;
+        featureSelect.innerHTML = features.map(feature => `<option value="${feature}">${feature}</option>`).join('');
     }
 
     function updateContent() {
@@ -426,7 +802,8 @@
         if (!model) return;
 
         const useVertex = useVertexCheckbox.checked;
-        const provider = data[providerSelect.value]
+        const provider = data[providerSelect.value];
+        const feature = featureSelect.value;
 
         if (!useVertex && providerSelect.value === 'anthropic') {
             model = model.replace('@', '-');
@@ -434,9 +811,9 @@
 
         let nonStreamingCurlTemplate = provider.non_streaming.curl.replace(/{{model}}/g, model);
         let streamingCurlTemplate = provider.streaming.curl.replace(/{{model}}/g, model);
-        let nonStreamingRequest = JSON.stringify(provider.non_streaming.text.request, null, 2);
+        let nonStreamingRequest = JSON.stringify(provider.non_streaming[feature].request, null, 2);
         nonStreamingRequest = nonStreamingRequest.replace(/{{model}}/g, model);
-        let streamingRequest = JSON.stringify(provider.streaming.text.request, null, 2);
+        let streamingRequest = JSON.stringify(provider.streaming[feature].request, null, 2);
         streamingRequest = streamingRequest.replace(/{{model}}/g, model);
 
         if (useVertex) {
@@ -455,23 +832,31 @@
                 streamingVertexUrl = streamingVertexUrl.replace('https://global-', 'https://');
             }
             if (providerSelect.value === 'anthropic') {
-                nonStreamingRequest = JSON.stringify(provider.non_streaming.text.request, null, 2);
+                nonStreamingRequest = JSON.stringify(provider.non_streaming[feature].request, null, 2);
                 nonStreamingRequest = nonStreamingRequest.replace('"model": "{{model}}"', '"anthropic_version": "vertex-2023-10-16"');
-                streamingRequest = JSON.stringify(provider.streaming.text.request, null, 2);
+                streamingRequest = JSON.stringify(provider.streaming[feature].request, null, 2);
                 streamingRequest = streamingRequest.replace('"model": "{{model}}"', '"anthropic_version": "vertex-2023-10-16"');
             }
 
-            nonStreamingCurlTemplate = `curl "${vertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -d `;
-            streamingCurlTemplate = `curl "${streamingVertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -d `;
+            if (feature === 'computer_use' && providerSelect.value === 'anthropic') {
+                nonStreamingCurlTemplate = `curl "${vertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: computer-use-2025-01-24" \\\n  -d `;
+                streamingCurlTemplate = `curl "${streamingVertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: computer-use-2025-01-24" \\\n -d `;
+            } else if (feature === 'memory' && providerSelect.value === 'anthropic') {
+                nonStreamingCurlTemplate = `curl "${vertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: context-management-2025-06-27" \\\n  -d `;
+                streamingCurlTemplate = `curl "${streamingVertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: context-management-2025-06-27" \\\n -d `;
+            } else {
+                nonStreamingCurlTemplate = `curl "${vertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -d `;
+                streamingCurlTemplate = `curl "${streamingVertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -d `;
+            }
         }
 
         const nonStreamingData = {
             request: nonStreamingRequest,
             curl: nonStreamingCurlTemplate + `'${nonStreamingRequest}'`,
-            response: JSON.stringify(provider.non_streaming.text.response, null, 2).replace(/{{model}}/g, model)
+            response: JSON.stringify(provider.non_streaming[feature].response, null, 2).replace(/{{model}}/g, model)
         };
 
-        const response = typeof provider.streaming.text.response === 'object' ? JSON.stringify(provider.streaming.text.response, null, 2) : provider.streaming.text.response;
+        const response = typeof provider.streaming[feature].response === 'object' ? JSON.stringify(provider.streaming[feature].response, null, 2) : provider.streaming[feature].response;
         const streamingData = {
             request: streamingRequest,
             curl: streamingCurlTemplate + `'${streamingRequest}'`,
@@ -529,6 +914,7 @@
 
     providerSelect.addEventListener('change', updateModels);
     modelSelect.addEventListener('change', updateContent);
+    featureSelect.addEventListener('change', updateContent);
     projectInput.addEventListener('input', updateContent);
     regionSelect.addEventListener('change', updateContent);
 

@@ -2,6 +2,7 @@
 
 # Default values
 PROVIDER="gemini"
+FEATURE="text"
 MODEL=""
 USE_VERTEX=false
 STREAMING=false
@@ -24,6 +25,10 @@ while [[ "$#" -gt 0 ]]; do
     ;;
   --region)
     REGION="$2"
+    shift
+    ;;
+  --feature)
+    FEATURE="$2"
     shift
     ;;
   --streaming) STREAMING=true ;;
@@ -52,6 +57,9 @@ PROVIDER_DATA=$(echo "$DATA" | jq -r --arg provider "$PROVIDER" '.[$provider]')
 if [ -z "$MODEL" ]; then
   MODEL=$(echo "$PROVIDER_DATA" | jq -r '.models[0]')
 fi
+if [ -z "$PROJECT" ]; then
+  PROJECT="\$PROJECT"
+fi
 if [ -z "$REGION" ]; then
   REGION="global"
 fi
@@ -63,7 +71,7 @@ fi
 
 # Get curl and request templates
 CURL_TEMPLATE=$(echo "$PROVIDER_DATA" | jq -r --arg sk "$STREAMING_KEY" '.[$sk].curl')
-REQUEST_TEMPLATE=$(echo "$PROVIDER_DATA" | jq -r --arg sk "$STREAMING_KEY" '.[$sk].text.request')
+REQUEST_TEMPLATE=$(echo "$PROVIDER_DATA" | jq -r --arg sk "$STREAMING_KEY" ".[\$sk].${FEATURE}.request")
 
 # Replace model in templates
 CURL_TEMPLATE=${CURL_TEMPLATE/\{\{model\}\}//$MODEL}
@@ -71,11 +79,6 @@ REQUEST_TEMPLATE=${REQUEST_TEMPLATE//\{\{model\}\}/$MODEL}
 
 # Handle Vertex AI
 if [ "$USE_VERTEX" = true ]; then
-  if [ -z "$PROJECT" ] || [ -z "$REGION" ]; then
-    echo "Error: --project and --region are required when --vertex is specified."
-    exit 1
-  fi
-
   URL_TEMPLATE=$(echo "$PROVIDER_DATA" | jq -r --arg sk "$STREAMING_KEY" '.[$sk].url')
   VERTEX_URL=$(echo "$URL_TEMPLATE" | sed "s/{{project}}/$PROJECT/g" | sed "s/{{region}}/$REGION/g" | sed "s/{{model}}/$MODEL/g")
 
@@ -84,13 +87,22 @@ if [ "$USE_VERTEX" = true ]; then
   fi
 
   if [ "$PROVIDER" = "anthropic" ]; then
-    REQUEST_TEMPLATE=${REQUEST_TEMPLATE/\"model\":\"[^\"]*\"/\"anthropic_version\":\"vertex-2023-10-16\"/}
+    # shellcheck disable=SC2001
+    REQUEST_TEMPLATE=$(echo "$REQUEST_TEMPLATE" | sed 's/\"model\": \"[^\"]*\"/\"anthropic_version\": \"vertex-2023-10-16\"/')
   fi
 
-  CURL_TEMPLATE="curl \"$VERTEX_URL\" \\
-  -H \"Authorization: Bearer \$(gcloud auth print-access-token)\" \\
-  -H \"Content-Type: application/json\" \\
-  -d "
+  if [ "$FEATURE" = "computer_use" ] && [ "$PROVIDER" = "anthropic" ]; then
+    CURL_TEMPLATE="curl \"$VERTEX_URL\" \\
+    -H \"Authorization: Bearer \$(gcloud auth print-access-token)\" \\
+    -H \"Content-Type: application/json\" \\
+    -H \"anthropic-beta: computer-use-2025-01-24\" \\
+    -d "
+  else
+    CURL_TEMPLATE="curl \"$VERTEX_URL\" \\
+    -H \"Authorization: Bearer \$(gcloud auth print-access-token)\" \\
+    -H \"Content-Type: application/json\" \\
+    -d "
+  fi
 fi
 
 # Construct final curl command
