@@ -11,6 +11,7 @@ use client_wrapper::ClientWrapper;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use rand::Rng;
+use rand_distr::{Distribution, Exp};
 use record::{Record, count_text_tokens};
 use stats::{Stats, generate_stats};
 
@@ -64,10 +65,6 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         let dataset = dataset.clone();
         let bar = bar.clone();
         handles.push(tokio::spawn(async move {
-            if let Some(delay) = get_delay(&cli.delay) {
-                tokio::time::sleep(delay).await;
-            }
-
             let mut latencies = Vec::new();
             let mut ttfts = Vec::new();
             let mut total_input_tokens = 0;
@@ -80,6 +77,10 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
                     && start_time.elapsed() > test_duration
                 {
                     break;
+                }
+
+                if let Some(delay) = get_delay(&cli) {
+                    tokio::time::sleep(delay).await;
                 }
 
                 let record = dataset[i as usize % dataset.len()].clone();
@@ -378,27 +379,35 @@ fn convert_to_llm_format(cli: &Args, v: String) -> String {
     }
 }
 
-fn get_delay(delay: &Option<String>) -> Option<Duration> {
-    delay.as_ref().map(|d| {
+fn get_delay(cli: &Args) -> Option<Duration> {
+    if let Some(rate) = cli.request_rate {
+        if rate <= 0.0 {
+            return None;
+        }
+        let lambda = rate / cli.clients as f64;
+        let exp = Exp::new(lambda).unwrap();
+        return Some(Duration::from_secs_f64(exp.sample(&mut rand::rng())));
+    }
+
+    if let Some(d) = cli.delay.as_ref() {
         if d.starts_with("rand(") && d.ends_with(")") {
             let parts: Vec<&str> = d[5..d.len() - 1].split(',').map(|s| s.trim()).collect();
             if parts.len() == 1 {
                 let max = parts[0].parse::<u64>().unwrap_or(0);
-                Duration::from_millis(rand::rng().random_range(0..=max))
+                return Some(Duration::from_millis(rand::rng().random_range(0..=max)));
             } else if parts.len() == 2 {
                 let min = parts[0].parse::<u64>().unwrap_or(0);
                 let max = parts[1].parse::<u64>().unwrap_or(0);
                 if min > max {
-                    return Duration::from_millis(0);
+                    return None;
                 }
-                Duration::from_millis(rand::rng().random_range(min..=max))
-            } else {
-                Duration::from_millis(0)
+                return Some(Duration::from_millis(rand::rng().random_range(min..=max)));
             }
-        } else {
-            Duration::from_millis(d.parse::<u64>().unwrap_or(0))
+        } else if let Ok(ms) = d.parse::<u64>() {
+            return Some(Duration::from_millis(ms));
         }
-    })
+    }
+    None
 }
 
 fn get_text_response(
@@ -488,41 +497,46 @@ mod tests {
 
     #[test]
     fn test_get_delay() {
-        assert_eq!(
-            get_delay(&Some("100".to_string())),
-            Some(Duration::from_millis(100))
-        );
+        let mut args = default_args();
 
-        let delay = get_delay(&Some("rand(100)".to_string()));
+        args.delay = Some("100".to_string());
+        assert_eq!(get_delay(&args), Some(Duration::from_millis(100)));
+
+        args.delay = Some("rand(100)".to_string());
+        let delay = get_delay(&args);
         assert!(delay.is_some());
         let millis = delay.unwrap().as_millis();
         assert!(millis <= 100);
 
-        let delay = get_delay(&Some("rand(100, 200)".to_string()));
+        args.delay = Some("rand(100, 200)".to_string());
+        let delay = get_delay(&args);
         assert!(delay.is_some());
         let millis = delay.unwrap().as_millis();
         assert!(millis >= 100 && millis <= 200);
 
-        assert_eq!(
-            get_delay(&Some("rand(1,2,3)".to_string())),
-            Some(Duration::from_millis(0))
-        );
+        args.delay = Some("rand(1,2,3)".to_string());
+        assert_eq!(get_delay(&args), None);
 
-        assert_eq!(
-            get_delay(&Some("invalid".to_string())),
-            Some(Duration::from_millis(0))
-        );
-        assert_eq!(get_delay(&None), None);
+        args.delay = Some("invalid".to_string());
+        assert_eq!(get_delay(&args), None);
 
-        assert_eq!(
-            get_delay(&Some("-100".to_string())),
-            Some(Duration::from_millis(0))
-        );
+        args.delay = None;
+        assert_eq!(get_delay(&args), None);
 
-        assert_eq!(
-            get_delay(&Some("rand(200, 100)".to_string())),
-            Some(Duration::from_millis(0))
-        );
+        args.delay = Some("-100".to_string());
+        assert_eq!(get_delay(&args), None);
+
+        args.delay = Some("rand_exp(100)".to_string());
+        let delay = get_delay(&args);
+        assert!(delay.is_none());
+
+        args.delay = Some("rand(200, 100)".to_string());
+        assert_eq!(get_delay(&args), None);
+
+        args.delay = None;
+        args.request_rate = Some(10.0);
+        let delay = get_delay(&args);
+        assert!(delay.is_some());
     }
 
     #[test]

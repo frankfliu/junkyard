@@ -41,7 +41,7 @@ pub struct Args {
     pub(crate) dataset: Option<PathBuf>,
 
     /// Delay in millis for initial requests (e.g. 10 or rand(100, 200))
-    #[arg(long)]
+    #[arg(long, conflicts_with = "request_rate")]
     pub(crate) delay: Option<String>,
 
     /// Duration of the test in seconds
@@ -79,6 +79,10 @@ pub struct Args {
     /// Number of requests to perform
     #[arg(short = 'N', long, default_value_t = 1)]
     pub(crate) repeat: u32,
+
+    /// Request rate in requests per second
+    #[arg(long, value_name = "RATE", conflicts_with = "delay")]
+    pub(crate) request_rate: Option<f64>,
 
     /// Write to response to output directory
     #[arg(short = 'o', long, value_name = "DIRECTORY")]
