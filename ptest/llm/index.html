@@ -127,7 +127,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "generationConfig": {
+            "candidateCount": 1
+          }
         },
         "response": {
           "candidates": [
@@ -1077,7 +1080,7 @@
           ],
           "tools": [
             {
-              "type": "computer_20250124",
+              "type": "computer_20251124",
               "name": "computer",
               "display_width_px": 1024,
               "display_height_px": 768,
@@ -1331,7 +1334,7 @@
           ],
           "tools": [
             {
-              "type": "computer_20250124",
+              "type": "computer_20251124",
               "name": "computer",
               "display_width_px": 1024,
               "display_height_px": 768,
@@ -1602,8 +1605,8 @@
             }
 
             if (feature === 'computer_use' && providerSelect.value === 'anthropic') {
-                nonStreamingCurlTemplate = `curl "${vertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: computer-use-2025-01-24" \\\n  -d `;
-                streamingCurlTemplate = `curl "${streamingVertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: computer-use-2025-01-24" \\\n -d `;
+                nonStreamingCurlTemplate = `curl "${vertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: computer-use-2025-11-24" \\\n  -d `;
+                streamingCurlTemplate = `curl "${streamingVertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: computer-use-2025-11-24" \\\n -d `;
             } else if (feature === 'memory' && providerSelect.value === 'anthropic') {
                 nonStreamingCurlTemplate = `curl "${vertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: context-management-2025-06-27" \\\n  -d `;
                 streamingCurlTemplate = `curl "${streamingVertexUrl}" \\\n  -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n  -H "Content-Type: application/json" \\\n  -H "anthropic-beta: context-management-2025-06-27" \\\n -d `;

@@ -17,7 +17,10 @@ async fn main() -> Result<(), anyhow::Error> {
             )
             .with_writer(non_blocking)
             .with_ansi(false)
+            .with_level(false)
+            .with_target(false)
             .json()
+            .flatten_event(true)
             .try_init()
             .ok();
         Some(guard)

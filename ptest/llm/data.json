@@ -32,7 +32,10 @@
                 }
               ]
             }
-          ]
+          ],
+          "generationConfig": {
+            "candidateCount": 1
+          }
         },
         "response": {
           "candidates": [
