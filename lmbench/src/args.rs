@@ -133,16 +133,16 @@ impl Args {
         match self.jq.as_deref() {
             Some("gemini") => {
                 if self.url.contains("streamGenerateContent") {
-                    "$[*].candidates[*].content.parts[*].text".to_string()
+                    "$[*].candidates[*] | $.content.parts[*].text".to_string()
                 } else {
-                    "$.candidates[*].content.parts[*].text".to_string()
+                    "$.candidates[*] | $.content.parts[*].text".to_string()
                 }
             }
             Some("openai") => {
                 if stream {
-                    "$.choices[*].delta.content".to_string()
+                    "$.choices[*] | $.delta.content".to_string()
                 } else {
-                    "$.choices[*].message.content".to_string()
+                    "$.choices[*] | $.message.content".to_string()
                 }
             }
             Some("anthropic") => {
@@ -244,18 +244,21 @@ mod tests {
         args.url = "https://host/streamGenerateContent".to_string();
         assert_eq!(
             args.get_jq_for_text(true),
-            "$[*].candidates[*].content.parts[*].text"
+            "$[*].candidates[*] | $.content.parts[*].text"
         );
         args.url = "https://host/generateContent".to_string();
         assert_eq!(
             args.get_jq_for_text(false),
-            "$.candidates[*].content.parts[*].text"
+            "$.candidates[*] | $.content.parts[*].text"
         );
 
         // Test openai
         args.jq = Some("openai".to_string());
-        assert_eq!(args.get_jq_for_text(true), "$.choices[*].delta.content");
-        assert_eq!(args.get_jq_for_text(false), "$.choices[*].message.content");
+        assert_eq!(args.get_jq_for_text(true), "$.choices[*] | $.delta.content");
+        assert_eq!(
+            args.get_jq_for_text(false),
+            "$.choices[*] | $.message.content"
+        );
 
         // Test anthropic
         args.jq = Some("anthropic".to_string());

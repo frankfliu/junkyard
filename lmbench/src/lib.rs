@@ -187,7 +187,10 @@ async fn process_single_record(
     let mut ttft = Some(ttft);
     if cli.tokens {
         let (text_response, it, ot) = get_text_response(cli, &headers, &body_text);
-        let token_count = count_text_tokens(&text_response);
+        let token_count = text_response
+            .iter()
+            .map(|v| count_text_tokens(&v))
+            .sum::<usize>();
         server_input_tokens += it;
         server_output_tokens += ot;
         benchmark_output_tokens += token_count;
@@ -204,9 +207,9 @@ async fn process_single_record(
                     benchmark_output_tokens = token_count,
                     server_input_tokens = it,
                     server_output_tokens = ot,
-                    generated_text = text_response,
+                    generated_text = tracing::field::valuable(&text_response),
                     response = body_text,
-                    headers = serde_json::to_string(&serializable_headers).unwrap(),
+                    headers = tracing::field::valuable(&serializable_headers),
                 );
             } else {
                 tracing::info!(
@@ -215,7 +218,7 @@ async fn process_single_record(
                     benchmark_output_tokens = token_count,
                     server_input_tokens = it,
                     server_output_tokens = ot,
-                    generated_text = text_response,
+                    generated_text = tracing::field::valuable(&text_response),
                 );
             }
         }
@@ -414,7 +417,7 @@ fn get_text_response(
     cli: &Args,
     headers: &reqwest::header::HeaderMap,
     body: &str,
-) -> (String, usize, usize) {
+) -> (Vec<String>, usize, usize) {
     let content_type = headers
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
@@ -427,10 +430,10 @@ fn get_text_response(
             .filter(|s| !s.is_empty() && *s != "[DONE]")
             .filter_map(|line| from_str::<Value>(line).ok())
             .map(|json| parse_json_response(cli, &json, true, false))
-            .collect::<Vec<(String, usize, usize)>>();
+            .collect::<Vec<(Vec<String>, usize, usize)>>();
         let aggregated_text = aggregated_resp
             .iter()
-            .map(|s| s.0.as_str())
+            .map(|s| s.0[0].as_str())
             .collect::<Vec<_>>()
             .join("");
         if aggregated_text.is_empty() {
@@ -438,13 +441,13 @@ fn get_text_response(
         }
         let input_tokens: usize = aggregated_resp.iter().map(|s| s.1).sum::<usize>();
         let output_tokens: usize = aggregated_resp.iter().map(|s| s.2).sum::<usize>();
-        (aggregated_text, input_tokens, output_tokens)
+        (vec![aggregated_text], input_tokens, output_tokens)
     } else if content_type.contains("application/json") {
         let json: Value =
             from_str(body).unwrap_or_else(|_| panic!("Failed to parse json body: {}", body));
         parse_json_response(cli, &json, false, true)
     } else {
-        (body.to_string(), 0, 0)
+        (vec![body.to_string()], 0, 0)
     }
 }
 
@@ -453,18 +456,22 @@ fn parse_json_response(
     json: &Value,
     stream: bool,
     warn: bool,
-) -> (String, usize, usize) {
+) -> (Vec<String>, usize, usize) {
     let jq_expr = &cli.get_jq_for_text(stream);
-    let selected = jsonpath_lib::select(json, jq_expr)
-        .unwrap_or_else(|_| panic!("Failed to apply jq: {}", jq_expr));
-    if warn && selected.is_empty() {
+    let selected = select_jsonpath(json, jq_expr);
+    if warn && (selected.is_empty() || selected.iter().all(|v| v.is_empty())) {
         eprintln!("warning: jq expression returned no results: {}", jq_expr);
     }
-    let text = selected
-        .iter()
-        .filter_map(|v| v.as_str())
-        .collect::<Vec<&str>>()
-        .join("");
+    let mut text = Vec::new();
+    for group in &selected {
+        text.push(
+            group
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<&str>>()
+                .join(""),
+        );
+    }
     let input_tokens = if let Some(jq) = cli.get_jq_for_input_tokens() {
         let selected = jsonpath_lib::select(json, &jq)
             .unwrap_or_else(|_| panic!("Failed to apply jq: {}", jq));
@@ -480,6 +487,39 @@ fn parse_json_response(
         0
     };
     (text, input_tokens, output_tokens)
+}
+
+fn select_jsonpath(json: &Value, expr: &str) -> Vec<Vec<Value>> {
+    let segments: Vec<&str> = expr
+        .split('|')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if segments.is_empty() {
+        return Vec::new();
+    }
+
+    if segments.len() > 2 {
+        panic!("Maximum 2 segments allowed in jq expression: {}", expr);
+    }
+
+    let first_selected = jsonpath_lib::select(json, segments[0])
+        .unwrap_or_else(|_| panic!("Failed to apply jq: {}", segments[0]));
+
+    if segments.len() == 1 {
+        return vec![first_selected.into_iter().cloned().collect()];
+    }
+
+    // segments.len() == 2
+    first_selected
+        .into_iter()
+        .map(|v| {
+            let second_selected = jsonpath_lib::select(v, segments[1])
+                .unwrap_or_else(|_| panic!("Failed to apply jq: {}", segments[1]));
+            second_selected.into_iter().cloned().collect()
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -548,7 +588,7 @@ mod tests {
         let body = "hello world";
         assert_eq!(
             get_text_response(&args, &headers, body),
-            ("hello world".to_string(), 0, 0)
+            (vec!["hello world".to_string()], 0, 0)
         );
 
         // Test with application/json
@@ -556,7 +596,7 @@ mod tests {
         let body = r#"{"foo": "bar"}"#;
         assert_eq!(
             get_text_response(&args, &headers, body),
-            ("".to_string(), 0, 0)
+            (vec!["".to_string()], 0, 0)
         );
 
         // Test with text/event-stream
@@ -567,7 +607,7 @@ mod tests {
         let body = "data: {\"foo\": \"bar\"}\n\ndata: {\"foo\": \"baz\"}\n\ndata: [DONE]\n";
         assert_eq!(
             get_text_response(&args, &headers, body),
-            ("".to_string(), 0, 0)
+            (vec!["".to_string()], 0, 0)
         );
     }
 
@@ -679,10 +719,10 @@ mod tests {
     fn test_parse_json_response() {
         let args = default_args();
         let json = json!([{"foo": "bar"}, {"foo": "baz"}]);
-        assert_eq!(parse_json_response(&args, &json, false, false).0, "");
+        assert_eq!(parse_json_response(&args, &json, false, false).0[0], "");
 
         let json = json!({"bar": "baz"});
-        assert_eq!(parse_json_response(&args, &json, false, true).0, "");
+        assert_eq!(parse_json_response(&args, &json, false, true).0[0], "");
     }
 
     #[test]
