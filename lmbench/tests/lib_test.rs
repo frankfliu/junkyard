@@ -343,7 +343,7 @@ async fn test_run_with_custom_jq() {
         "hello",
         "--tokens",
         "-j",
-        r#"$.outputs[?(@.name=="text_output")].data[0]"#,
+        r#".outputs[] | select(.name=="text_output") | .data[0]"#,
         &server.url("/v2/models/ensemble/generate"),
     ]);
 
@@ -380,7 +380,7 @@ async fn test_run_with_delay_and_duration() {
 
     let stats = run(args).await.unwrap();
 
-    assert!(mock.hits() < 1000);
+    assert!(mock.calls() < 1000);
     assert!(stats.success_requests < 1000);
 }
 
@@ -395,7 +395,7 @@ async fn test_run_with_mismatch_url() {
     let args = Args::parse_from(["lmbench", "-d", "hello", &server.url("/mismatch")]);
 
     let stats = run(args).await.unwrap();
-    assert_eq!(mock.hits(), 0);
+    assert_eq!(mock.calls(), 0);
     assert_eq!(stats.success_requests, 0);
     assert_eq!(stats.error_requests, 1);
 }

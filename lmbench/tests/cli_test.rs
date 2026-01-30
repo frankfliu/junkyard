@@ -49,7 +49,7 @@ async fn test_main_with_output() {
 
     cmd.assert().success();
 
-    assert_eq!(mock.hits(), 4);
+    assert_eq!(mock.calls(), 4);
 
     let content = std::fs::read_to_string(dir.path().join("output.log")).unwrap();
     assert_eq!(content.lines().count(), 4);

@@ -2,6 +2,7 @@ extern crate core;
 
 pub mod args;
 pub mod client_wrapper;
+pub mod jq;
 pub(crate) mod record;
 pub mod stats;
 
@@ -433,6 +434,7 @@ fn get_text_response(
             .collect::<Vec<(Vec<String>, usize, usize)>>();
         let aggregated_text = aggregated_resp
             .iter()
+            .filter(|s| !s.0.is_empty())
             .map(|s| s.0[0].as_str())
             .collect::<Vec<_>>()
             .join("");
@@ -458,68 +460,39 @@ fn parse_json_response(
     warn: bool,
 ) -> (Vec<String>, usize, usize) {
     let jq_expr = &cli.get_jq_for_text(stream);
-    let selected = select_jsonpath(json, jq_expr);
-    if warn && (selected.is_empty() || selected.iter().all(|v| v.is_empty())) {
-        eprintln!("warning: jq expression returned no results: {}", jq_expr);
-    }
+    let selected = jq::jq(jq_expr, json);
     let mut text = Vec::new();
     for group in &selected {
-        text.push(
-            group
-                .iter()
-                .filter_map(|v| v.as_str())
-                .collect::<Vec<&str>>()
-                .join(""),
-        );
+        if let Some(s) = group.as_str() {
+            text.push(s.to_string());
+        } else if let Some(arr) = group.as_array() {
+            text.push(
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<&str>>()
+                    .join(""),
+            );
+        }
     }
-    let input_tokens = if let Some(jq) = cli.get_jq_for_input_tokens() {
-        let selected = jsonpath_lib::select(json, &jq)
-            .unwrap_or_else(|_| panic!("Failed to apply jq: {}", jq));
+    if text.is_empty() {
+        if warn {
+            eprintln!("warning: jq expression returned no results: {}", jq_expr);
+        }
+        return (vec![], 0, 0);
+    }
+    let input_tokens = if let Some(jq_expr) = cli.get_jq_for_input_tokens() {
+        let selected = jq::jq(&jq_expr, json);
         selected.iter().filter_map(|v| v.as_u64()).sum::<u64>() as usize
     } else {
         0
     };
-    let output_tokens = if let Some(jq) = cli.get_jq_for_output_tokens() {
-        let selected = jsonpath_lib::select(json, &jq)
-            .unwrap_or_else(|_| panic!("Failed to apply jq: {}", jq));
+    let output_tokens = if let Some(jq_expr) = cli.get_jq_for_output_tokens() {
+        let selected = jq::jq(&jq_expr, json);
         selected.iter().filter_map(|v| v.as_u64()).sum::<u64>() as usize
     } else {
         0
     };
     (text, input_tokens, output_tokens)
-}
-
-fn select_jsonpath(json: &Value, expr: &str) -> Vec<Vec<Value>> {
-    let segments: Vec<&str> = expr
-        .split('|')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    if segments.is_empty() {
-        return Vec::new();
-    }
-
-    if segments.len() > 2 {
-        panic!("Maximum 2 segments allowed in jq expression: {}", expr);
-    }
-
-    let first_selected = jsonpath_lib::select(json, segments[0])
-        .unwrap_or_else(|_| panic!("Failed to apply jq: {}", segments[0]));
-
-    if segments.len() == 1 {
-        return vec![first_selected.into_iter().cloned().collect()];
-    }
-
-    // segments.len() == 2
-    first_selected
-        .into_iter()
-        .map(|v| {
-            let second_selected = jsonpath_lib::select(v, segments[1])
-                .unwrap_or_else(|_| panic!("Failed to apply jq: {}", segments[1]));
-            second_selected.into_iter().cloned().collect()
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -594,10 +567,7 @@ mod tests {
         // Test with application/json
         headers.insert("content-type", HeaderValue::from_static("application/json"));
         let body = r#"{"foo": "bar"}"#;
-        assert_eq!(
-            get_text_response(&args, &headers, body),
-            (vec!["".to_string()], 0, 0)
-        );
+        assert_eq!(get_text_response(&args, &headers, body), (vec![], 0, 0));
 
         // Test with text/event-stream
         headers.insert(
@@ -628,12 +598,12 @@ mod tests {
         let records = load_dataset(&args).await.unwrap();
         assert_eq!(records.len(), 2);
         assert_eq!(
-            records[0].body,
-            Some(r#"{"contents":[{"role":"user","parts":[{"text":"line 1"}]}]}"#.to_string())
+            from_str::<Value>(records[0].body.as_ref().unwrap()).unwrap(),
+            json!({"contents":[{"role":"user","parts":[{"text":"line 1"}]}]})
         );
         assert_eq!(
-            records[1].body,
-            Some(r#"{"contents":[{"role":"user","parts":[{"text":"line 2"}]}]}"#.to_string())
+            from_str::<Value>(records[1].body.as_ref().unwrap()).unwrap(),
+            json!({"contents":[{"role":"user","parts":[{"text":"line 2"}]}]})
         );
 
         let args = Args::parse_from([
@@ -647,12 +617,12 @@ mod tests {
         let records = load_dataset(&args).await.unwrap();
         assert_eq!(records.len(), 2);
         assert_eq!(
-            records[0].body,
-            Some(r#"{"anthropic_version":"vertex-2023-10-16","max_tokens":1024,"messages":[{"role":"user","content":"line 1"}]}"#.to_string())
+            from_str::<Value>(records[0].body.as_ref().unwrap()).unwrap(),
+            json!({"anthropic_version":"vertex-2023-10-16","max_tokens":1024,"messages":[{"role":"user","content":"line 1"}]})
         );
         assert_eq!(
-            records[1].body,
-            Some(r#"{"anthropic_version":"vertex-2023-10-16","max_tokens":1024,"messages":[{"role":"user","content":"line 2"}]}"#.to_string())
+            from_str::<Value>(records[1].body.as_ref().unwrap()).unwrap(),
+            json!({"anthropic_version":"vertex-2023-10-16","max_tokens":1024,"messages":[{"role":"user","content":"line 2"}]})
         );
 
         let args = Args::parse_from([
@@ -666,12 +636,12 @@ mod tests {
         let records = load_dataset(&args).await.unwrap();
         assert_eq!(records.len(), 2);
         assert_eq!(
-            records[0].body,
-            Some(r#"{"messages":[{"role":"user","content":"line 1"}]}"#.to_string())
+            from_str::<Value>(records[0].body.as_ref().unwrap()).unwrap(),
+            json!({"messages":[{"role":"user","content":"line 1"}]})
         );
         assert_eq!(
-            records[1].body,
-            Some(r#"{"messages":[{"role":"user","content":"line 2"}]}"#.to_string())
+            from_str::<Value>(records[1].body.as_ref().unwrap()).unwrap(),
+            json!({"messages":[{"role":"user","content":"line 2"}]})
         );
 
         let args = Args::parse_from([
@@ -718,15 +688,30 @@ mod tests {
     #[test]
     fn test_parse_json_response() {
         let args = default_args();
-        let json = json!([{"foo": "bar"}, {"foo": "baz"}]);
-        assert_eq!(parse_json_response(&args, &json, false, false).0[0], "");
+
+        let json = json!({"generated_text": "test"});
+        assert_eq!(parse_json_response(&args, &json, false, false).0[0], "test");
 
         let json = json!({"bar": "baz"});
-        assert_eq!(parse_json_response(&args, &json, false, true).0[0], "");
+        assert!(parse_json_response(&args, &json, false, true).0.is_empty());
+
+        // Test with string primitive
+        let mut args = default_args();
+        args.jq = Some(".foo".to_string());
+        let json = json!({"foo": "bar"});
+        assert_eq!(parse_json_response(&args, &json, false, false).0[0], "bar");
+
+        // Test with array of strings
+        args.jq = Some(".foo".to_string());
+        let json = json!({"foo": ["bar", "baz"]});
+        assert_eq!(
+            parse_json_response(&args, &json, false, false).0[0],
+            "barbaz"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "Failed to apply jq: invalid jq expression")]
+    #[should_panic(expected = "Failed to parse jq expression")]
     fn test_parse_json_response_panic_with_invalid_expression() {
         let args = Args::parse_from([
             "lmbench",

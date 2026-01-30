@@ -133,30 +133,30 @@ impl Args {
         match self.jq.as_deref() {
             Some("gemini") => {
                 if self.url.contains("streamGenerateContent") {
-                    "$[*].candidates[*] | $.content.parts[*].text".to_string()
+                    ".[] | .candidates[] | .content.parts[].text".to_string()
                 } else {
-                    "$.candidates[*] | $.content.parts[*].text".to_string()
+                    ".candidates[] | .content.parts[].text".to_string()
                 }
             }
             Some("openai") => {
                 if stream {
-                    "$.choices[*] | $.delta.content".to_string()
+                    ".choices[] | .delta.content".to_string()
                 } else {
-                    "$.choices[*] | $.message.content".to_string()
+                    ".choices[] | .message.content".to_string()
                 }
             }
             Some("anthropic") => {
                 if stream {
-                    "$.delta.text".to_string()
+                    ".delta.text".to_string()
                 } else {
-                    "$.content[*].text".to_string()
+                    ".content[].text".to_string()
                 }
             }
             Some("TGI") | None => {
                 if stream {
-                    "$.token.text".to_string()
+                    ".token.text".to_string()
                 } else {
-                    "$.generated_text".to_string()
+                    ".generated_text".to_string()
                 }
             }
             Some(expr) => expr.to_string(),
@@ -165,18 +165,18 @@ impl Args {
 
     pub(crate) fn get_jq_for_input_tokens(&self) -> Option<String> {
         match self.jq.as_deref() {
-            Some("gemini") => Some("$.usageMetadata.promptTokenCount".to_string()),
-            Some("anthropic") => Some("$.usage.input_tokens".to_string()),
-            Some("openai") => Some("$.usage.prompt_tokens".to_string()),
+            Some("gemini") => Some(".usageMetadata.promptTokenCount".to_string()),
+            Some("anthropic") => Some(".usage.input_tokens".to_string()),
+            Some("openai") => Some(".usage.prompt_tokens".to_string()),
             _ => None,
         }
     }
 
     pub(crate) fn get_jq_for_output_tokens(&self) -> Option<String> {
         match self.jq.as_deref() {
-            Some("gemini") => Some("$.usageMetadata.candidatesTokenCount".to_string()),
-            Some("anthropic") => Some("$.usage.input_tokens".to_string()),
-            Some("openai") => Some("$.usage.completion_tokens".to_string()),
+            Some("gemini") => Some(".usageMetadata.candidatesTokenCount".to_string()),
+            Some("anthropic") => Some(".usage.input_tokens".to_string()),
+            Some("openai") => Some(".usage.completion_tokens".to_string()),
             _ => None,
         }
     }
@@ -236,39 +236,36 @@ mod tests {
         let mut args = default_args();
 
         // Test None case
-        assert_eq!(args.get_jq_for_text(true), "$.token.text");
-        assert_eq!(args.get_jq_for_text(false), "$.generated_text");
+        assert_eq!(args.get_jq_for_text(true), ".token.text");
+        assert_eq!(args.get_jq_for_text(false), ".generated_text");
 
         // Test gemini
         args.jq = Some("gemini".to_string());
         args.url = "https://host/streamGenerateContent".to_string();
         assert_eq!(
             args.get_jq_for_text(true),
-            "$[*].candidates[*] | $.content.parts[*].text"
+            ".[] | .candidates[] | .content.parts[].text"
         );
         args.url = "https://host/generateContent".to_string();
         assert_eq!(
             args.get_jq_for_text(false),
-            "$.candidates[*] | $.content.parts[*].text"
+            ".candidates[] | .content.parts[].text"
         );
 
         // Test openai
         args.jq = Some("openai".to_string());
-        assert_eq!(args.get_jq_for_text(true), "$.choices[*] | $.delta.content");
-        assert_eq!(
-            args.get_jq_for_text(false),
-            "$.choices[*] | $.message.content"
-        );
+        assert_eq!(args.get_jq_for_text(true), ".choices[] | .delta.content");
+        assert_eq!(args.get_jq_for_text(false), ".choices[] | .message.content");
 
         // Test anthropic
         args.jq = Some("anthropic".to_string());
-        assert_eq!(args.get_jq_for_text(true), "$.delta.text");
-        assert_eq!(args.get_jq_for_text(false), "$.content[*].text");
+        assert_eq!(args.get_jq_for_text(true), ".delta.text");
+        assert_eq!(args.get_jq_for_text(false), ".content[].text");
 
         // Test TGI
         args.jq = Some("TGI".to_string());
-        assert_eq!(args.get_jq_for_text(true), "$.token.text");
-        assert_eq!(args.get_jq_for_text(false), "$.generated_text");
+        assert_eq!(args.get_jq_for_text(true), ".token.text");
+        assert_eq!(args.get_jq_for_text(false), ".generated_text");
 
         // Test custom expression
         args.jq = Some(".foo.bar".to_string());
@@ -287,21 +284,21 @@ mod tests {
         args.jq = Some("gemini".to_string());
         assert_eq!(
             args.get_jq_for_input_tokens(),
-            Some("$.usageMetadata.promptTokenCount".to_string())
+            Some(".usageMetadata.promptTokenCount".to_string())
         );
 
         // Test openai
         args.jq = Some("openai".to_string());
         assert_eq!(
             args.get_jq_for_input_tokens(),
-            Some("$.usage.prompt_tokens".to_string())
+            Some(".usage.prompt_tokens".to_string())
         );
 
         // Test anthropic
         args.jq = Some("anthropic".to_string());
         assert_eq!(
             args.get_jq_for_input_tokens(),
-            Some("$.usage.input_tokens".to_string())
+            Some(".usage.input_tokens".to_string())
         );
 
         // Test custom expression
@@ -320,21 +317,21 @@ mod tests {
         args.jq = Some("gemini".to_string());
         assert_eq!(
             args.get_jq_for_output_tokens(),
-            Some("$.usageMetadata.candidatesTokenCount".to_string())
+            Some(".usageMetadata.candidatesTokenCount".to_string())
         );
 
         // Test openai
         args.jq = Some("openai".to_string());
         assert_eq!(
             args.get_jq_for_output_tokens(),
-            Some("$.usage.completion_tokens".to_string())
+            Some(".usage.completion_tokens".to_string())
         );
 
         // Test anthropic
         args.jq = Some("anthropic".to_string());
         assert_eq!(
             args.get_jq_for_output_tokens(),
-            Some("$.usage.input_tokens".to_string())
+            Some(".usage.input_tokens".to_string())
         );
 
         // Test custom expression
