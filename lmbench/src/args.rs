@@ -68,9 +68,18 @@ pub struct Args {
     #[arg(short = 'H', long, value_name = "LINE")]
     pub(crate) header: Vec<String>,
 
-    /// Predefine schema (gemini/openai/anthropic/TGI) or custom jq expression for token output
+    /// jq expression for transfer input json to request payload
     #[arg(short, long, value_name = "EXPRESSION")]
-    pub(crate) jq: Option<String>,
+    pub input_jq: Option<String>,
+
+    /// jq expression to extract generated text from response
+    #[arg(
+        short = 'j',
+        long,
+        value_name = "EXPRESSION",
+        conflicts_with = "server"
+    )]
+    pub output_jq: Option<String>,
 
     /// model ID
     #[arg(short, long)]
@@ -91,6 +100,10 @@ pub struct Args {
     /// Silent mode
     #[arg(short, long)]
     pub(crate) silent: bool,
+
+    /// Predefine server type (gemini/openai/anthropic/TGI)
+    #[arg(long, value_name = "SERVER_TYPE", conflicts_with = "output_jq")]
+    pub(crate) server: Option<String>,
 
     /// Output token per seconds
     #[arg(short, long)]
@@ -130,7 +143,7 @@ impl Args {
     }
 
     pub(crate) fn get_jq_for_text(&self, stream: bool) -> String {
-        match self.jq.as_deref() {
+        match self.server.as_deref() {
             Some("gemini") => {
                 if self.url.contains("streamGenerateContent") {
                     ".[] | .candidates[] | .content.parts[].text".to_string()
@@ -152,19 +165,29 @@ impl Args {
                     ".content[].text".to_string()
                 }
             }
-            Some("TGI") | None => {
+            Some("TGI") => {
                 if stream {
                     ".token.text".to_string()
                 } else {
                     ".generated_text".to_string()
                 }
             }
-            Some(expr) => expr.to_string(),
+            _ => {
+                if let Some(jq) = self.output_jq.as_deref() {
+                    jq.to_string()
+                } else {
+                    if stream {
+                        ".token.text".to_string()
+                    } else {
+                        ".generated_text".to_string()
+                    }
+                }
+            }
         }
     }
 
     pub(crate) fn get_jq_for_input_tokens(&self) -> Option<String> {
-        match self.jq.as_deref() {
+        match self.server.as_deref() {
             Some("gemini") => Some(".usageMetadata.promptTokenCount".to_string()),
             Some("anthropic") => Some(".usage.input_tokens".to_string()),
             Some("openai") => Some(".usage.prompt_tokens".to_string()),
@@ -173,7 +196,7 @@ impl Args {
     }
 
     pub(crate) fn get_jq_for_output_tokens(&self) -> Option<String> {
-        match self.jq.as_deref() {
+        match self.server.as_deref() {
             Some("gemini") => Some(".usageMetadata.candidatesTokenCount".to_string()),
             Some("anthropic") => Some(".usage.input_tokens".to_string()),
             Some("openai") => Some(".usage.completion_tokens".to_string()),
@@ -240,7 +263,7 @@ mod tests {
         assert_eq!(args.get_jq_for_text(false), ".generated_text");
 
         // Test gemini
-        args.jq = Some("gemini".to_string());
+        args.server = Some("gemini".to_string());
         args.url = "https://host/streamGenerateContent".to_string();
         assert_eq!(
             args.get_jq_for_text(true),
@@ -253,22 +276,23 @@ mod tests {
         );
 
         // Test openai
-        args.jq = Some("openai".to_string());
+        args.server = Some("openai".to_string());
         assert_eq!(args.get_jq_for_text(true), ".choices[] | .delta.content");
         assert_eq!(args.get_jq_for_text(false), ".choices[] | .message.content");
 
         // Test anthropic
-        args.jq = Some("anthropic".to_string());
+        args.server = Some("anthropic".to_string());
         assert_eq!(args.get_jq_for_text(true), ".delta.text");
         assert_eq!(args.get_jq_for_text(false), ".content[].text");
 
         // Test TGI
-        args.jq = Some("TGI".to_string());
+        args.server = Some("TGI".to_string());
         assert_eq!(args.get_jq_for_text(true), ".token.text");
         assert_eq!(args.get_jq_for_text(false), ".generated_text");
 
-        // Test custom expression
-        args.jq = Some(".foo.bar".to_string());
+        // Test output_jq expression
+        args.server = None;
+        args.output_jq = Some(".foo.bar".to_string());
         assert_eq!(args.get_jq_for_text(true), ".foo.bar");
         assert_eq!(args.get_jq_for_text(false), ".foo.bar");
     }
@@ -281,29 +305,25 @@ mod tests {
         assert_eq!(args.get_jq_for_input_tokens(), None);
 
         // Test gemini
-        args.jq = Some("gemini".to_string());
+        args.server = Some("gemini".to_string());
         assert_eq!(
             args.get_jq_for_input_tokens(),
             Some(".usageMetadata.promptTokenCount".to_string())
         );
 
         // Test openai
-        args.jq = Some("openai".to_string());
+        args.server = Some("openai".to_string());
         assert_eq!(
             args.get_jq_for_input_tokens(),
             Some(".usage.prompt_tokens".to_string())
         );
 
         // Test anthropic
-        args.jq = Some("anthropic".to_string());
+        args.server = Some("anthropic".to_string());
         assert_eq!(
             args.get_jq_for_input_tokens(),
             Some(".usage.input_tokens".to_string())
         );
-
-        // Test custom expression
-        args.jq = Some(".foo.bar".to_string());
-        assert_eq!(args.get_jq_for_input_tokens(), None);
     }
 
     #[test]
@@ -314,28 +334,28 @@ mod tests {
         assert_eq!(args.get_jq_for_output_tokens(), None);
 
         // Test gemini
-        args.jq = Some("gemini".to_string());
+        args.server = Some("gemini".to_string());
         assert_eq!(
             args.get_jq_for_output_tokens(),
             Some(".usageMetadata.candidatesTokenCount".to_string())
         );
 
         // Test openai
-        args.jq = Some("openai".to_string());
+        args.server = Some("openai".to_string());
         assert_eq!(
             args.get_jq_for_output_tokens(),
             Some(".usage.completion_tokens".to_string())
         );
 
         // Test anthropic
-        args.jq = Some("anthropic".to_string());
+        args.server = Some("anthropic".to_string());
         assert_eq!(
             args.get_jq_for_output_tokens(),
             Some(".usage.input_tokens".to_string())
         );
 
         // Test custom expression
-        args.jq = Some(".foo.bar".to_string());
+        args.server = Some(".foo.bar".to_string());
         assert_eq!(args.get_jq_for_output_tokens(), None);
     }
 }

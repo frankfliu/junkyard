@@ -49,7 +49,7 @@ async fn test_run_with_openai_mock() {
         "-d",
         "hello",
         "--tokens",
-        "-j",
+        "--server",
         "openai",
         &server.url("/v1/chat/completions"),
     ]);
@@ -84,7 +84,7 @@ async fn test_run_with_openai_streaming_mock() {
         "-d",
         "hello",
         "--tokens",
-        "-j",
+        "--server",
         "openai",
         &server.url("/v1/chat/completions"),
     ]);
@@ -126,7 +126,7 @@ async fn test_run_with_gemini_mock() {
         "-d",
         "hello",
         "--tokens",
-        "-j",
+        "--server",
         "gemini",
         &server.url("/gemini:generateContent"),
     ]);
@@ -168,7 +168,7 @@ async fn test_run_with_gemini_streaming_mock() {
         "-d",
         "hello",
         "--tokens",
-        "-j",
+        "--server",
         "gemini",
         &server.url("/gemini:streamGenerateContent"),
     ]);
@@ -204,7 +204,7 @@ async fn test_run_with_anthropic_mock() {
         "-d",
         "hello",
         "--tokens",
-        "-j",
+        "--server",
         "anthropic",
         &server.url("/v1/messages"),
     ]);
@@ -239,7 +239,7 @@ async fn test_run_with_anthropic_streaming_mock() {
         "-d",
         "hello",
         "--tokens",
-        "-j",
+        "--server",
         "anthropic",
         &server.url("/v1/messages"),
     ]);
@@ -271,7 +271,7 @@ async fn test_run_with_tgi_mock() {
         "-d",
         "hello",
         "--tokens",
-        "-j",
+        "--server",
         "TGI",
         &server.url("/generate"),
     ]);
@@ -305,7 +305,7 @@ async fn test_run_with_tgi_streaming_mock() {
         "-d",
         "hello",
         "--tokens",
-        "-j",
+        "--server",
         "TGI",
         &server.url("/generate_stream"),
     ]);
@@ -319,7 +319,40 @@ async fn test_run_with_tgi_streaming_mock() {
 }
 
 #[tokio::test]
-async fn test_run_with_custom_jq() {
+async fn test_run_with_custom_input_jq() {
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(POST).path("/v2/models/ensemble/generate");
+        then.respond_with(|req: &HttpMockRequest| {
+            let echoed_body = req.body().to_string();
+            HttpMockResponse::builder()
+                .status(200)
+                .header("content-type", "application/json")
+                .body(echoed_body)
+                .build()
+        });
+    });
+
+    let args = Args::parse_from([
+        "lmbench",
+        "-d",
+        r#"{"question":"Hello world"}"#,
+        "--tokens",
+        "--input-jq",
+        r#"{generated_text: [.question]}"#,
+        &server.url("/v2/models/ensemble/generate"),
+    ]);
+
+    let stats = run(args).await.unwrap();
+
+    mock.assert();
+
+    assert_eq!(stats.success_requests, 1);
+    assert_eq!(stats.output_tokens, Some(2));
+}
+
+#[tokio::test]
+async fn test_run_with_custom_output_jq() {
     let server = MockServer::start();
     let triton_mock = server.mock(|when, then| {
         when.method(POST).path("/v2/models/ensemble/generate");
@@ -342,7 +375,7 @@ async fn test_run_with_custom_jq() {
         "-d",
         "hello",
         "--tokens",
-        "-j",
+        "--output-jq",
         r#".outputs[] | select(.name=="text_output") | .data[0]"#,
         &server.url("/v2/models/ensemble/generate"),
     ]);

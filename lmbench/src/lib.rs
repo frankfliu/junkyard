@@ -95,7 +95,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
                     )) => {
                         latencies.push(duration);
                         if let Some(t) = ttft {
-                            (ttfts).push(t);
+                            ttfts.push(t);
                         }
                         total_output_tokens += benchmark_output_tokens;
                         total_server_input_tokens += server_input_tokens;
@@ -282,8 +282,7 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
             ProgressStyle::default_bar()
                 .template(
                     "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
-                )
-                .unwrap()
+                )?
                 .progress_chars("#>-"),
         );
         Some(bar)
@@ -319,18 +318,19 @@ fn convert_to_llm_format(cli: &Args, v: String) -> String {
     let Ok(json) = from_str::<Value>(&v) else {
         return v;
     };
+    if let Some(expr) = cli.input_jq.as_deref() {
+        return serde_json::to_string(&jq::jq(expr, &json)[0]).unwrap();
+    }
 
-    match cli.jq.as_deref() {
+    match cli.server.as_deref() {
         Some("TGI") => {
             if let Some(inputs) = json.get("prompts") {
-                json!({"inputs": inputs}).to_string()
-            } else {
-                v
+                return json!({"inputs": inputs}).to_string();
             }
         }
         Some("gemini") => {
             if let Some(inputs) = json.get("inputs").or(json.get("prompts")) {
-                json!({
+                return json!({
                     "contents": [
                         {
                             "role": "user",
@@ -342,14 +342,12 @@ fn convert_to_llm_format(cli: &Args, v: String) -> String {
                         }
                     ]
                 })
-                .to_string()
-            } else {
-                v
+                .to_string();
             }
         }
         Some("anthropic") => {
             if let Some(inputs) = json.get("inputs").or(json.get("prompts")) {
-                json!({
+                return json!({
                     "anthropic_version": "vertex-2023-10-16",
                     "max_tokens": 1024,
                     "messages": [
@@ -359,14 +357,12 @@ fn convert_to_llm_format(cli: &Args, v: String) -> String {
                         }
                     ]
                 })
-                .to_string()
-            } else {
-                v
+                .to_string();
             }
         }
         Some("openai") => {
             if let Some(inputs) = json.get("inputs").or(json.get("prompts")) {
-                json!({
+                return json!({
                     "messages": [
                         {
                             "role": "user",
@@ -374,13 +370,12 @@ fn convert_to_llm_format(cli: &Args, v: String) -> String {
                         }
                     ]
                 })
-                .to_string()
-            } else {
-                v
+                .to_string();
             }
         }
-        _ => v,
+        _ => (),
     }
+    v
 }
 
 fn get_delay(cli: &Args) -> Option<Duration> {
@@ -590,7 +585,7 @@ mod tests {
         let args = Args::parse_from([
             "lmbench",
             "https://localhost",
-            "-j",
+            "--server",
             "gemini",
             "--dataset",
             path.as_str(),
@@ -609,7 +604,7 @@ mod tests {
         let args = Args::parse_from([
             "lmbench",
             "https://localhost",
-            "-j",
+            "--server",
             "anthropic",
             "--dataset",
             path.as_str(),
@@ -628,7 +623,7 @@ mod tests {
         let args = Args::parse_from([
             "lmbench",
             "https://localhost",
-            "-j",
+            "--server",
             "openai",
             "--dataset",
             path.as_str(),
@@ -647,7 +642,7 @@ mod tests {
         let args = Args::parse_from([
             "lmbench",
             "https://localhost",
-            "-j",
+            "--server",
             "TGI",
             "--dataset",
             path.as_str(),
@@ -697,12 +692,13 @@ mod tests {
 
         // Test with string primitive
         let mut args = default_args();
-        args.jq = Some(".foo".to_string());
+        args.server = None;
+        args.output_jq = Some(".foo".to_string());
         let json = json!({"foo": "bar"});
         assert_eq!(parse_json_response(&args, &json, false, false).0[0], "bar");
 
         // Test with array of strings
-        args.jq = Some(".foo".to_string());
+        args.output_jq = Some(".foo".to_string());
         let json = json!({"foo": ["bar", "baz"]});
         assert_eq!(
             parse_json_response(&args, &json, false, false).0[0],
@@ -716,7 +712,7 @@ mod tests {
         let args = Args::parse_from([
             "lmbench",
             "https://localhost",
-            "-j",
+            "--output-jq",
             "invalid jq expression",
         ]);
         let json = json!({"foo": "bar"});
