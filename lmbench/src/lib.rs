@@ -270,8 +270,30 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
         }
     } else {
         let content = fs::read_to_string(path)?;
-        for (i, line) in content.lines().enumerate() {
-            data.push((i.to_string(), line.to_string()));
+        let extension = path.extension().and_then(|e| e.to_str());
+        let name = path.file_stem().unwrap().to_string_lossy().into_owned();
+        if extension == Some("jsonl") {
+            for (i, line) in content.lines().enumerate() {
+                data.push((i.to_string(), line.to_string()));
+            }
+        } else if extension == Some("json") {
+            let trimmed = content.trim();
+            if trimmed.starts_with("[") && trimmed.ends_with("]") {
+                if let Ok(Value::Array(arr)) = from_str::<Value>(trimmed) {
+                    for (i, item) in arr.iter().enumerate() {
+                        let s = if item.is_string() {
+                            item.as_str().unwrap().to_string()
+                        } else {
+                            serde_json::to_string(item)?
+                        };
+                        data.push((i.to_string(), s));
+                    }
+                }
+            } else {
+                data.push((name, content));
+            }
+        } else {
+            data.push((name, content));
         }
     }
 
@@ -578,9 +600,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_dataset_from_file() {
-        let file = tempfile::NamedTempFile::new().unwrap();
+        let file = tempfile::NamedTempFile::with_suffix(".json").unwrap();
         let path = file.path().to_str().unwrap().to_string();
-        fs::write(&path, "{\"inputs\":\"line 1\"}\n{\"prompts\":\"line 2\"}").unwrap();
+        fs::write(
+            &path,
+            "[{\"inputs\":\"line 1\"},\n{\"prompts\":\"line 2\"}]",
+        )
+        .unwrap();
 
         let args = Args::parse_from([
             "lmbench",
@@ -601,6 +627,9 @@ mod tests {
             json!({"contents":[{"role":"user","parts":[{"text":"line 2"}]}]})
         );
 
+        let file = tempfile::NamedTempFile::with_suffix(".jsonl").unwrap();
+        let path = file.path().to_str().unwrap().to_string();
+        fs::write(&path, "{\"inputs\":\"line 1\"}\n{\"prompts\":\"line 2\"}").unwrap();
         let args = Args::parse_from([
             "lmbench",
             "https://localhost",
@@ -651,6 +680,22 @@ mod tests {
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].body, Some(r#"{"inputs":"line 1"}"#.to_string()));
         assert_eq!(records[1].body, Some(r#"{"inputs":"line 2"}"#.to_string()));
+
+        let file = tempfile::NamedTempFile::with_suffix(".txt").unwrap();
+        let path = file.path().to_str().unwrap().to_string();
+        fs::write(&path, r#"{"inputs":"line 1"}"#).unwrap();
+
+        let args = Args::parse_from([
+            "lmbench",
+            "https://localhost",
+            "--input-jq",
+            r#"{"prompt": .inputs}"#,
+            "--dataset",
+            path.as_str(),
+        ]);
+        let records = load_dataset(&args).await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].body, Some(r#"{"prompt":"line 1"}"#.to_string()));
     }
 
     #[tokio::test]
