@@ -27,10 +27,10 @@ pub struct Stats {
     pub qps: f64,
     pub input_tokens: Option<usize>,
     #[serde(skip)]
-    pub input_tokens_per_second: Option<f64>,
+    pub input_tokens_per_min: Option<f64>,
     pub output_tokens: Option<usize>,
     #[serde(with = "round_option_float")]
-    pub output_tokens_per_second: Option<f64>,
+    pub output_tokens_per_min: Option<f64>,
     pub server_input_tokens: Option<usize>,
     pub server_output_tokens: Option<usize>,
 }
@@ -102,9 +102,9 @@ pub fn generate_stats(
             ttft_ms: None,
             qps: 0.0,
             output_tokens: None,
-            output_tokens_per_second: None,
+            output_tokens_per_min: None,
             input_tokens: None,
-            input_tokens_per_second: None,
+            input_tokens_per_min: None,
             server_input_tokens: None,
             server_output_tokens: None,
         };
@@ -122,13 +122,13 @@ pub fn generate_stats(
     };
 
     let qps = success_requests as f64 / total_time.as_secs_f64();
-    let (input_tokens, input_tokens_per_second, output_tokens, output_tokens_per_second) =
+    let (input_tokens, input_tokens_per_min, output_tokens, output_tokens_per_min) =
         if output_tokens > 0 {
             (
                 Some(input_tokens),
-                Some(input_tokens as f64 / total_time.as_secs_f64()),
+                Some(input_tokens as f64 / total_time.as_secs_f64() * 60.),
                 Some(output_tokens),
-                Some(output_tokens as f64 / total_time.as_secs_f64()),
+                Some(output_tokens as f64 / total_time.as_secs_f64() * 60.),
             )
         } else {
             (None, None, None, None)
@@ -153,9 +153,9 @@ pub fn generate_stats(
         ttft_ms,
         qps,
         input_tokens,
-        input_tokens_per_second,
+        input_tokens_per_min,
         output_tokens,
-        output_tokens_per_second,
+        output_tokens_per_min,
         server_input_tokens: server_it,
         server_output_tokens: server_ot,
     }
@@ -212,8 +212,8 @@ mod tests {
         assert_eq!(stats.latency_ms.p90, 1000);
         assert_eq!(stats.latency_ms.p99, 1000);
         assert!((stats.qps - 1.8181).abs() < 0.0001);
-        assert!((stats.input_tokens_per_second.unwrap() - 90.9090).abs() < 0.0001);
-        assert!((stats.output_tokens_per_second.unwrap() - 181.8181).abs() < 0.0001);
+        assert!((stats.input_tokens_per_min.unwrap() - 5454.5454).abs() < 0.0001);
+        assert!((stats.output_tokens_per_min.unwrap() - 10909.0909).abs() < 0.0001);
 
         let expected_json = serde_json::to_string_pretty(&stats).unwrap();
         assert_eq!(stats.to_string(), format!("{}\n", expected_json));
@@ -248,8 +248,8 @@ mod tests {
         assert_eq!(stats.latency_ms.p99, 0);
         assert_eq!(stats.qps, 0.0);
         assert_eq!(stats.input_tokens, None);
-        assert_eq!(stats.input_tokens_per_second, None);
+        assert_eq!(stats.input_tokens_per_min, None);
         assert_eq!(stats.output_tokens, None);
-        assert_eq!(stats.output_tokens_per_second, None);
+        assert_eq!(stats.output_tokens_per_min, None);
     }
 }
