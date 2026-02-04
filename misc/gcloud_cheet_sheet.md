@@ -142,73 +142,95 @@ gcloud alpha logging read logName=projects/$PROJECT/logs/aiplatform.googleapis.c
 ## GKE
 
 ```bash
-gcloud components install gke-gcloud-auth-plugin
-gcloud components install kubectl
+# gcloud components install gke-gcloud-auth-plugin
+# gcloud components install kubectl
 
-CLUSTER_NAME=$(gcloud container clusters list --project $TP --format="[no-heading](NAME)")
+export CLUSTER_NAME=cluster-1
+export LOCATION=us-central1-b
+export POOL_NAME=cpu-pool
+gcloud container clusters delete $CLUSTER_NAME --location $LOCATION -q
+
+gcloud container clusters create $CLUSTER_NAME \
+    --project $PROJECT \
+    --location $LOCATION \
+    --num-nodes 1
+
+gcloud container node-pools create $POOL_NAME \
+    --cluster $CLUSTER_NAME \
+    --project $PROJECT \
+    --location $LOCATION \
+    --machine-type=e2-standard-4 \
+    --disk-type "pd-ssd" --disk-size "300" \
+    --enable-autoscaling \
+    --min-nodes 1 \
+    --max-nodes 5 \
+    --num-nodes=1 \
+    --scopes "https://www.googleapis.com/auth/devstorage.read_write,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/trace.append"
+
+gcloud container clusters resize $CLUSTER_NAME --node-pool $POOL_NAME \
+    --location $LOCATION \
+    --num-nodes 2
+
+gcloud container node-pools update $POOL_NAME \
+    --cluster $CLUSTER_NAME \
+    --location $LOCATION \
+    --enable-autoscaling \
+    --total-min-nodes 1 \
+    --total-max-nodes 5
+
+gcloud container node-pools delete default-pool --cluster $CLUSTER_NAME --location $LOCATION -q
+
+CLUSTER_NAME=$(gcloud container clusters list --project $PROJECT --format="[no-heading](NAME)")
 echo $CLUSTER_NAME
 
-gcloud container clusters get-credentials $CLUSTER_NAME --region us-central1 --project $TP
+gcloud container clusters get-credentials $CLUSTER_NAME \
+    --project $PROJECT \
+    --location $LOCATION
 
 kubectl get namespaces
+kubectl get pods --namespace default
+
+kubectl get crd
+kubectl describe crd <crd_name>
+
+kubectl get deployments
+kubectl get deployment deployment-1 -o yaml
+kubectl get services
+kubectl get ingress
+kubectl get protectedapplications
+kubectl api-resources | grep applications
+
+# install jobset:
+kubectl apply --server-side -f https://github.com/kubernetes-sigs/jobset/releases/download/v0.11.0/manifests.yaml
+
+# install marketplace tools
+kubectl apply -f "https://raw.githubusercontent.com/GoogleCloudPlatform/marketplace-k8s-app-tools/0.12.11/crd/app-crd.yaml"
 
 POD=$(kubectl get pods --all-namespaces | grep prediction | awk '{print $2}')
 echo $POD
 
+POD=$(kubectl get pods --all-namespaces | grep prediction | awk '{print $2}')
+
+kubectl logs $POD
+
 kubectl exec -it $POD -n prediction -- /bin/bash
 
-gcloud beta container clusters delete cluster-1 --zone us-central1-b
-
-gcloud beta container clusters create cluster-1 \
-    --project $PROJECT \
-    --zone us-central1-b \
-    --fleet-project=$PROJECT\
-    --tier "standard" \
-    --no-enable-basic-auth \
-    --cluster-version "1.30.5-gke.1443001" \
-    --release-channel "regular" \
-    --machine-type "g2-standard-4" \
-    --accelerator "type=nvidia-l4,count=1,gpu-driver-version=latest" \
-    --image-type "COS_CONTAINERD" \
-    --disk-type "pd-ssd" --disk-size "300" \
-    --metadata disable-legacy-endpoints=true \
-    --scopes "https://www.googleapis.com/auth/devstorage.read_only","https://www.googleapis.com/auth/logging.write","https://www.googleapis.com/auth/monitoring","https://www.googleapis.com/auth/servicecontrol","https://www.googleapis.com/auth/service.management.readonly","https://www.googleapis.com/auth/trace.append" \
-    --num-nodes "2" \
-    --logging=SYSTEM,WORKLOAD \
-    --monitoring=SYSTEM,STORAGE,POD,DEPLOYMENT,STATEFULSET,DAEMONSET,HPA,CADVISOR,KUBELET \
-    --enable-ip-alias \
-    --network "projects/$PROJECT/global/networks/default" \
-    --subnetwork "projects/$PROJECT/regions/us-central1/subnetworks/default" \
-    --no-enable-intra-node-visibility \
-    --default-max-pods-per-node "110" \
-    --enable-ip-access \
-    --security-posture=standard \
-    --workload-vulnerability-scanning=disabled \
-    --no-enable-master-authorized-networks \
-    --no-enable-google-cloud-access \
-    --addons HorizontalPodAutoscaling,HttpLoadBalancing,GcePersistentDiskCsiDriver \
-    --enable-autoupgrade --enable-autorepair \
-    --max-surge-upgrade 1 \
-    --max-unavailable-upgrade 0 \
-    --binauthz-evaluation-mode=DISABLED \
-    --enable-managed-prometheus \
-    --enable-shielded-nodes \
-    --no-autoprovisioning-enable-insecure-kubelet-readonly-port
-
-gcloud container clusters get-credentials cluster-1 \
-  --region us-central1
-
-kubectl get deployment deployment-1 -o yaml
-
-kubectl get pods --namespace $NAMESPACE
 kubectl wait --for=condition=Available --timeout=700s --namespace $NAMESPACE deployment/tei-deployment
 
 kubectl port-forward --namespace $NAMESPACE service/tei-service 8080:8080
+kubectl port-forward --namespace default svc/model-server 8080:80
 
 gcloud container get-server-config \
     --flatten="channels" \
     --filter="channels.channel=STABLE" \
     --format="yaml(channels.channel,channels.defaultVersion,channels.validVersions)"
+
+### export cluster configurations to terraform
+gcloud beta resource-config bulk-export \
+    --path output \
+    --project $PROJECT \
+    --resource-format=terraform \
+    --resource-types=ContainerCluster,ContainerNodePool
 ```
 
 # Pub/Sub
