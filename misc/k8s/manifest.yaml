@@ -1,0 +1,13 @@
+manifestVersion: v1
+
+application:
+  name: DJL Serving
+  version: 0.1.0
+
+chart:
+  path: djl-serving
+
+# If you have a deployer image, it would be defined here.
+# For this example, we assume the use of the standard Helm deployer.
+# deployer:
+#   image: gcr.io/cloud-marketplace-tools/k8s/deployer:latest

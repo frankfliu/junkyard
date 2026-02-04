@@ -1,0 +1,22 @@
+replicaCount: 1
+
+image:
+  repository: deepjavalibrary/djl-serving
+  tag: 0.36.0-cpu-full
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+model:
+  url: "s3://djl-ai/models/xgb/xgb.zip"
+  name: "xgboost-model"
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi

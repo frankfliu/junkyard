@@ -1,0 +1,36 @@
+x-google-marketplace:
+  schemaVersion: v2
+
+properties:
+  model.url:
+    type: string
+    title: Model URL
+    description: URL of the XGBoost model to serve (e.g., a .zip file containing the model).
+    default: "s3://djl-ai/models/xgb/xgb.zip"
+
+  replicaCount:
+    type: integer
+    title: Replica Count
+    description: Number of replicas to deploy.
+    default: 1
+    minimum: 1
+
+  image.tag:
+    type: string
+    title: Image Tag
+    description: The tag of the DJL Serving image to use.
+    default: "0.36.0-cpu-full"
+
+form:
+  - widget: text
+    description: Deployment Configuration
+    groups:
+      - name: model_settings
+        title: Model Settings
+        properties:
+          - model.url
+      - name: deployment_settings
+        title: Deployment Settings
+        properties:
+          - replicaCount
+          - image.tag

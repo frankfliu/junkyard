@@ -1,0 +1,27 @@
+apiVersion: app.k8s.io/v1beta1
+kind: Application
+metadata:
+  name: {{ include "djl-serving.fullname" . }}
+  labels:
+    {{- include "djl-serving.labels" . | nindent 4 }}
+  annotations:
+    kubernetes-engine.google.com/marketplace: "true"
+spec:
+  descriptor:
+    type: djl-serving
+    version: {{ .Chart.Version }}
+    description: "XGBoost model serving using DJL Serving"
+    maintainers:
+    - name: DJL Team
+      email: djl-dev@amazon.com
+    links:
+    - description: 'GitHub'
+      url: "https://github.com/deepjavalibrary/djl-serving"
+  selector:
+    matchLabels:
+      {{- include "djl-serving.selectorLabels" . | nindent 6 }}
+  componentKinds:
+  - group: apps
+    kind: Deployment
+  - group: ""
+    kind: Service
