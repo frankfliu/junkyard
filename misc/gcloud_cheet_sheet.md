@@ -188,7 +188,9 @@ gcloud container clusters get-credentials $CLUSTER_NAME \
     --location $LOCATION
 
 kubectl get namespaces
-kubectl get pods --namespace default
+kubectl get pods --namespace default -o wide
+kubectl get endpoints
+kubectl get networkpolicies
 
 kubectl get crd
 kubectl describe crd <crd_name>
