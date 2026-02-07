@@ -341,7 +341,11 @@ fn convert_to_llm_format(cli: &Args, v: String) -> String {
         return v;
     };
     if let Some(expr) = cli.input_jq.as_deref() {
-        return serde_json::to_string(&jq::jq(expr, &json)[0]).unwrap();
+        let inputs = jq::jq(expr, &json);
+        if inputs.is_empty() {
+            panic!("Failed to convert to target LLM request format.");
+        }
+        return serde_json::to_string(&inputs[0]).unwrap();
     }
 
     match cli.server.as_deref() {

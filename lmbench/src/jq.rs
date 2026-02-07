@@ -30,8 +30,11 @@ pub fn jq(jq_expr: &str, input: &Value) -> Vec<Value> {
 
     let mut results = Vec::new();
     for res in out {
-        if let Ok(val) = res {
-            results.push(Value::from(val));
+        match res {
+            Ok(val) => results.push(Value::from(val)),
+            Err(_) => {
+                return vec![];
+            }
         }
     }
     results
@@ -77,5 +80,13 @@ mod tests {
         let input_json = json!([1, 2, 3]);
         let expected = vec![json!(1), json!(2), json!(3)];
         assert_eq!(jq(jq_expr, &input_json), expected);
+    }
+
+    #[test]
+    fn test_jq_error() {
+        let jq_expr = r#"{ "b": if has("b") then .b else error("Error") end }"#;
+        let input_json = json!({"a": 1});
+        let ret = jq(jq_expr, &input_json);
+        assert!(ret.is_empty());
     }
 }
