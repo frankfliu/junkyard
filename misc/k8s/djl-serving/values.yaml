@@ -20,3 +20,9 @@ resources:
   requests:
     cpu: 500m
     memory: 1Gi
+
+gcs:
+  enabled: false
+  bucketName: "my-gcs-bucket"
+  mountPath: "/gcs"
+  readOnly: true

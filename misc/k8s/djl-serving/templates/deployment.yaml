@@ -34,3 +34,18 @@ spec:
             httpGet:
               path: /ping
               port: http
+          {{- if .Values.gcs.enabled }}
+          volumeMounts:
+            - name: gcs-bucket
+              mountPath: {{ .Values.gcs.mountPath }}
+              readOnly: {{ .Values.gcs.readOnly }}
+          {{- end }}
+      {{- if .Values.gcs.enabled }}
+      volumes:
+        - name: gcs-bucket
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: {{ .Values.gcs.bucketName }}
+              mountOptions: "implicit-dirs"
+      {{- end }}

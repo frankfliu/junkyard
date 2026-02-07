@@ -21,6 +21,24 @@ properties:
     description: The tag of the DJL Serving image to use.
     default: "0.36.0-cpu-full"
 
+  gcs.enabled:
+    type: boolean
+    title: Enable GCS Mount
+    description: Whether to mount a GCS bucket.
+    default: false
+
+  gcs.bucketName:
+    type: string
+    title: GCS Bucket Name
+    description: The name of the GCS bucket to mount.
+    default: ""
+
+  gcs.mountPath:
+    type: string
+    title: GCS Mount Path
+    description: The path in the container where the GCS bucket will be mounted.
+    default: "/gcs"
+
 form:
   - widget: text
     description: Deployment Configuration
@@ -29,6 +47,12 @@ form:
         title: Model Settings
         properties:
           - model.url
+      - name: gcs_settings
+        title: GCS Settings
+        properties:
+          - gcs.enabled
+          - gcs.bucketName
+          - gcs.mountPath
       - name: deployment_settings
         title: Deployment Settings
         properties:
