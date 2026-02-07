@@ -1,29 +1,32 @@
-use jaq_interpret::{Ctx, FilterT, ParseCtx, RcIter, Val};
+use jaq_core::{Compiler, Ctx, RcIter, load};
+use jaq_json::Val;
 use serde_json::Value;
 
 /// Executes a jq expression against an input JSON string using the native `jaq` library.
 /// Returns a vector of all values produced by the filter.
 pub fn jq(jq_expr: &str, input: &Value) -> Vec<Value> {
-    let mut pctx = ParseCtx::new(Vec::new());
-    pctx.insert_natives(jaq_core::core());
-    pctx.insert_defs(jaq_std::std());
+    let loader = load::Loader::new(jaq_std::defs().chain(jaq_json::defs()));
+    let arena = load::Arena::default();
 
-    let (f, errs) = jaq_parse::parse(jq_expr, jaq_parse::main());
-    if !errs.is_empty() {
-        panic!("Failed to parse jq expression: {:?}", errs);
-    }
+    // parse the filter
+    let modules = loader
+        .load(
+            &arena,
+            load::File {
+                code: jq_expr,
+                path: (),
+            },
+        )
+        .unwrap_or_else(|e| panic!("Failed to parse jq expression: {:?}", e));
 
-    let f = pctx.compile(f.expect("Parsed filter is None"));
-
-    if !pctx.errs.is_empty() {
-        panic!(
-            "Failed to compile jq expression: {} errors occurred",
-            pctx.errs.len()
-        );
-    }
+    // compile the filter
+    let filter = Compiler::default()
+        .with_funs(jaq_std::funs().chain(jaq_json::funs()))
+        .compile(modules)
+        .unwrap_or_else(|e| panic!("Failed to compile jq expression: {:?}", e));
 
     let inputs = RcIter::new(core::iter::empty());
-    let out = f.run((Ctx::new([], &inputs), Val::from(input.clone())));
+    let out = filter.run((Ctx::new([], &inputs), Val::from(input.clone())));
 
     let mut results = Vec::new();
     for res in out {
