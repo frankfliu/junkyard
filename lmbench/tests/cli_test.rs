@@ -53,7 +53,7 @@ async fn test_main_with_output() {
 
     let content = std::fs::read_to_string(dir.path().join("output.log")).unwrap();
     assert_eq!(content.lines().count(), 4);
-    assert!(content.contains(r#""response":"world"#));
+    assert!(content.contains(r#""generated_text":["world"]"#));
 
     // with count token
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("lmbench"));

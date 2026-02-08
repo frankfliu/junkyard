@@ -224,11 +224,20 @@ async fn process_single_record(
             }
         }
     } else if cli.output.is_some() {
-        tracing::info!(
-            task_id = record.id,
-            duration = duration.as_millis(),
-            response = body_text,
-        );
+        let (text_response, _, _) = get_text_response(cli, &headers, &body_text);
+        if text_response.is_empty() {
+            tracing::info!(
+                task_id = record.id,
+                duration = duration.as_millis(),
+                response = body_text,
+            );
+        } else {
+            tracing::info!(
+                task_id = record.id,
+                duration = duration.as_millis(),
+                generated_text = tracing::field::valuable(&text_response),
+            );
+        }
         ttft = None;
     }
 
