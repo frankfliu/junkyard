@@ -24,6 +24,10 @@ pub struct Args {
     #[arg(long, value_name = "SECONDS", default_value_t = 60)]
     pub(crate) connect_timeout: u64,
 
+    /// Maximum time allowed for the entire request (including read)
+    #[arg(long, value_name = "SECONDS", default_value_t = 300)]
+    pub(crate) timeout: u64,
+
     /// HTTP POST data, '@' allowed
     #[arg(short, long)]
     pub(crate) data: Option<String>,

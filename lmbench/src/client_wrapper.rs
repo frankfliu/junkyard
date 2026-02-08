@@ -30,7 +30,8 @@ impl ClientWrapper {
             Ok(ClientWrapper::Bedrock(BedrockClient::new(&config)))
         } else {
             let client = Client::builder()
-                .timeout(Duration::from_secs(cli.connect_timeout))
+                .connect_timeout(Duration::from_secs(cli.connect_timeout))
+                .timeout(Duration::from_secs(cli.timeout))
                 .build()?;
             Ok(ClientWrapper::Default(client))
         }
@@ -39,7 +40,8 @@ impl ClientWrapper {
     #[cfg(not(feature = "bedrock"))]
     pub async fn new(cli: &Args) -> Result<Self, anyhow::Error> {
         let client = Client::builder()
-            .timeout(Duration::from_secs(cli.connect_timeout))
+            .connect_timeout(Duration::from_secs(cli.connect_timeout))
+            .timeout(Duration::from_secs(cli.timeout))
             .build()?;
         Ok(ClientWrapper::Default(client))
     }
