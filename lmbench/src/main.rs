@@ -3,7 +3,7 @@ use lmbench::args::Args;
 use lmbench::run;
 use std::path::Path;
 use std::process::ExitCode;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> ExitCode {

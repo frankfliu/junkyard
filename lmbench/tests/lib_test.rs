@@ -225,6 +225,9 @@ async fn test_run_with_anthropic_streaming_mock() {
         then.status(200)
             .header("content-type", "text/event-stream")
             .body(indoc! { r#"
+                event: ping
+                data: {"type": "ping"}
+
                 data: {"delta":{"text":"hello"}}
 
                 data: {"delta":{"text":" world"}}

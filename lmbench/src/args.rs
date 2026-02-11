@@ -150,7 +150,7 @@ impl Args {
         match self.server.as_deref() {
             Some("gemini") => {
                 if self.url.contains("streamGenerateContent") {
-                    ".[] | .candidates[] | .content.parts[].text".to_string()
+                    r#"map(.candidates[].content.parts[].text) | join("")"#.to_string()
                 } else {
                     ".candidates[] | .content.parts[].text".to_string()
                 }
@@ -271,7 +271,7 @@ mod tests {
         args.url = "https://host/streamGenerateContent".to_string();
         assert_eq!(
             args.get_jq_for_text(true),
-            ".[] | .candidates[] | .content.parts[].text"
+            r#"map(.candidates[].content.parts[].text) | join("")"#
         );
         args.url = "https://host/generateContent".to_string();
         assert_eq!(
