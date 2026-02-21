@@ -189,6 +189,8 @@ gcloud container clusters get-credentials $CLUSTER_NAME \
 
 kubectl get namespaces
 kubectl get pods --namespace default -o wide
+kubectl get pods -o=custom-columns=NAME:.metadata.name,NODE:.spec.nodeName
+kubectl get nodes -l "cloud.google.com/gke-nodepool=default-pool"
 kubectl get endpoints
 kubectl get networkpolicies
 
@@ -201,6 +203,9 @@ kubectl get services
 kubectl get ingress
 kubectl get protectedapplications
 kubectl api-resources | grep applications
+
+kubectl get sa
+kubectl get serviceaccount default -o yaml
 
 # install jobset:
 kubectl apply --server-side -f https://github.com/kubernetes-sigs/jobset/releases/download/v0.11.0/manifests.yaml
