@@ -36,6 +36,8 @@ async fn main() -> ExitCode {
         .init();
 
     let stat = run(cli.clone()).await.unwrap();
+    tracing::info!(task_id = "-1", total_time_ms = stat.total_time_ms);
+
     if stat.get_error_rate() > cli.error_rate {
         ExitCode::FAILURE
     } else {

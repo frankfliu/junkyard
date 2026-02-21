@@ -52,7 +52,7 @@ async fn test_main_with_output() {
     assert_eq!(mock.calls(), 4);
 
     let content = std::fs::read_to_string(dir.path().join("output.log")).unwrap();
-    assert_eq!(content.lines().count(), 4);
+    assert_eq!(content.lines().count(), 5);
     assert!(content.contains(r#""generated_text":["world"]"#));
 
     // with count token

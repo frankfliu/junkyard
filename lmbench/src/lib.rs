@@ -183,17 +183,14 @@ async fn process_single_record(
         client.send_request(cli, record, total_requests).await?;
 
     let mut benchmark_output_tokens = 0;
-    let mut server_input_tokens = 0;
-    let mut server_output_tokens = 0;
-    let mut ttft = Some(ttft);
+    let mut opt_ttft = Some(ttft);
+    let (text_response, server_input_tokens, server_output_tokens) =
+        get_text_response(cli, &headers, &body_text);
     if cli.tokens {
-        let (text_response, it, ot) = get_text_response(cli, &headers, &body_text);
         let token_count = text_response
             .iter()
             .map(|v| count_text_tokens(&v))
             .sum::<usize>();
-        server_input_tokens += it;
-        server_output_tokens += ot;
         benchmark_output_tokens += token_count;
         if cli.output.is_some() {
             if cli.verbose {
@@ -205,9 +202,10 @@ async fn process_single_record(
                 tracing::info!(
                     task_id = record.id,
                     duration = duration.as_millis(),
+                    ttft_us = ttft.as_micros(),
                     benchmark_output_tokens = token_count,
-                    server_input_tokens = it,
-                    server_output_tokens = ot,
+                    server_input_tokens = server_input_tokens,
+                    server_output_tokens = server_output_tokens,
                     generated_text = tracing::field::valuable(&text_response),
                     response = body_text,
                     headers = tracing::field::valuable(&serializable_headers),
@@ -216,34 +214,38 @@ async fn process_single_record(
                 tracing::info!(
                     task_id = record.id,
                     duration = duration.as_millis(),
+                    ttft_us = ttft.as_micros(),
                     benchmark_output_tokens = token_count,
-                    server_input_tokens = it,
-                    server_output_tokens = ot,
+                    server_input_tokens = server_input_tokens,
+                    server_output_tokens = server_output_tokens,
                     generated_text = tracing::field::valuable(&text_response),
                 );
             }
         }
     } else if cli.output.is_some() {
-        let (text_response, _, _) = get_text_response(cli, &headers, &body_text);
         if text_response.is_empty() {
             tracing::info!(
                 task_id = record.id,
                 duration = duration.as_millis(),
+                ttft_us = ttft.as_micros(),
                 response = body_text,
             );
         } else {
             tracing::info!(
                 task_id = record.id,
                 duration = duration.as_millis(),
+                ttft_us = ttft.as_micros(),
+                server_input_tokens = server_input_tokens,
+                server_output_tokens = server_output_tokens,
                 generated_text = tracing::field::valuable(&text_response),
             );
         }
-        ttft = None;
+        opt_ttft = None;
     }
 
     Ok((
         duration,
-        ttft,
+        opt_ttft,
         benchmark_output_tokens,
         server_input_tokens,
         server_output_tokens,
