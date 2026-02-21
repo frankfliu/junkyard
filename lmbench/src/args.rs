@@ -52,6 +52,10 @@ pub struct Args {
     #[arg(long)]
     pub(crate) duration: Option<u32>,
 
+    /// Fails the benchmark if error_rate breaches
+    #[arg(short, long, env = "ERROR_RATE", default_value_t = 0.)]
+    pub error_rate: f64,
+
     /// extra parameters for json dataset
     #[arg(long)]
     pub(crate) extra_parameters: Option<String>,

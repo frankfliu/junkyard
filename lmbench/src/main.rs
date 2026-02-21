@@ -35,8 +35,8 @@ async fn main() -> ExitCode {
         .with(file_layer)
         .init();
 
-    let stat = run(cli).await.unwrap();
-    if stat.error_requests > 0 {
+    let stat = run(cli.clone()).await.unwrap();
+    if stat.get_error_rate() > cli.error_rate {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS

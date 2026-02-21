@@ -161,6 +161,17 @@ pub fn generate_stats(
     }
 }
 
+impl Stats {
+    pub fn get_error_rate(&self) -> f64 {
+        let total_requests = self.success_requests + self.error_requests;
+        if total_requests == 0 {
+            0.0
+        } else {
+            self.error_requests as f64 / total_requests as f64
+        }
+    }
+}
+
 impl fmt::Display for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let json = serde_json::to_string_pretty(&self).unwrap();
