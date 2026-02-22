@@ -51,7 +51,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         bar.set_style(
             ProgressStyle::default_bar()
                 .template(
-                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+                    "Benchmarking: {spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
                 )?
                 .progress_chars("#>-"),
         );
@@ -314,7 +314,7 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
         bar.set_style(
             ProgressStyle::default_bar()
                 .template(
-                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+                    "Loading dataset: {spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
                 )?
                 .progress_chars("#>-"),
         );
