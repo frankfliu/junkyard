@@ -55,6 +55,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
                 )?
                 .progress_chars("#>-"),
         );
+        bar.set_position(0);
         Some(bar)
     } else {
         None
@@ -318,6 +319,7 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
                 )?
                 .progress_chars("#>-"),
         );
+        bar.set_position(0);
         Some(bar)
     } else {
         None
