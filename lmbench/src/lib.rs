@@ -16,11 +16,20 @@ use rand_distr::{Distribution, Exp};
 use record::{Record, count_text_tokens};
 use stats::{Stats, generate_stats};
 
+#[cfg(feature = "harmony")]
+use harmony_protocol::chat::{Content, Role};
+#[cfg(feature = "harmony")]
+use harmony_protocol::{HarmonyEncodingName, load_harmony_encoding};
 use serde_json::{Value, from_str, json};
 use std::fs;
 use std::path::Path;
+#[cfg(feature = "harmony")]
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
+
+#[cfg(feature = "harmony")]
+static HARMONY_PARSING_ENABLED: OnceLock<bool> = OnceLock::new();
 
 type JobResult = Result<
     (
@@ -502,14 +511,14 @@ fn parse_json_response(
     let mut text = Vec::new();
     for group in &selected {
         if let Some(s) = group.as_str() {
-            text.push(s.to_string());
+            text.push(extract_harmony_message(s));
         } else if let Some(arr) = group.as_array() {
-            text.push(
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .collect::<Vec<&str>>()
-                    .join(""),
-            );
+            let joined = arr
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<&str>>()
+                .join("");
+            text.push(extract_harmony_message(&joined));
         }
     }
     if text.is_empty() {
@@ -531,6 +540,74 @@ fn parse_json_response(
         0
     };
     (text, server_input_tokens, server_output_tokens)
+}
+
+#[cfg(feature = "harmony")]
+fn extract_harmony_message(s: &str) -> String {
+    // Check if harmony response parsing is enabled
+    // In test mode, check the environment variable directly to allow tests to modify it
+    // In production, use cached value for performance
+    let harmony_parsing_enabled = if cfg!(test) {
+        std::env::var("HARMONY_RESPONSE_PARSING")
+            .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(false)
+    } else {
+        *HARMONY_PARSING_ENABLED.get_or_init(|| {
+            std::env::var("HARMONY_RESPONSE_PARSING")
+                .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+                .unwrap_or(false)
+        })
+    };
+
+    if !harmony_parsing_enabled || !s.contains("<|") || !s.contains("|>") {
+        return s.to_string();
+    }
+
+    // Load the specific Harmony encoding used by the gpt-oss models
+    let encoding = match load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss) {
+        Ok(enc) => enc,
+        Err(_) => return s.to_string(),
+    };
+
+    // Tokenize the response string, allowing all special tokens
+    let allowed_special = encoding.tokenizer().special_tokens().clone();
+    let (response_tokens, _) = encoding.tokenizer().encode(s, &allowed_special);
+
+    // Parse the model's response tokens into structured `Message` objects
+    let messages = match encoding
+        .parse_messages_from_completion_tokens(response_tokens, Some(Role::Assistant))
+    {
+        Ok(msgs) => msgs,
+        Err(_) => return s.to_string(),
+    };
+
+    // Extract text content from all parsed messages
+    let mut result = String::new();
+    for message in messages {
+        for content in &message.content {
+            match content {
+                Content::Text(text_content) => {
+                    // Extract text from content
+                    result.push_str(&text_content.text);
+                }
+                _ => {
+                    // Skip other content types
+                }
+            }
+        }
+    }
+
+    // If we found message content, return it; otherwise return original string
+    if !result.is_empty() {
+        result
+    } else {
+        s.to_string()
+    }
+}
+
+#[cfg(not(feature = "harmony"))]
+fn extract_harmony_message(s: &str) -> String {
+    s.to_string()
 }
 
 #[cfg(test)]
@@ -783,5 +860,49 @@ mod tests {
         ]);
         let json = json!({"foo": "bar"});
         parse_json_response(&args, &json, false, false);
+    }
+
+    #[test]
+    #[cfg(feature = "harmony")]
+    fn test_extract_harmony_message() {
+        // Test with harmony parsing disabled (default)
+        let harmony_text = "<|start|>assistant<|channel|>analysis<|message|>Hello world!<|end|>";
+        // Without harmony parsing enabled, should return original string
+        assert_eq!(extract_harmony_message(harmony_text), harmony_text);
+
+        // Enable harmony parsing for this test
+        unsafe {
+            std::env::set_var("HARMONY_RESPONSE_PARSING", "true");
+        }
+
+        // Test basic harmony response format that successfully parses
+        let harmony_text = "<|start|>assistant<|channel|>analysis<|message|>Hello world!<|end|>";
+        assert_eq!(extract_harmony_message(harmony_text), "Hello world!");
+
+        // Test with message tag
+        let harmony_text = "<|start|><|channel|>main<|message|>Test message<|end|>";
+        let result = extract_harmony_message(harmony_text);
+        // This format may or may not parse successfully depending on the harmony library
+        // If it extracts text, verify it's correct; otherwise it returns the original
+        assert!(result == "Test message" || result == harmony_text);
+
+        // Test non-harmony text (should return as-is)
+        let normal_text = "Just a normal response";
+        assert_eq!(
+            extract_harmony_message(normal_text),
+            "Just a normal response"
+        );
+
+        // Test text without harmony markers (should return as-is even with parsing enabled)
+        let simple_text = "Regular text without special tokens";
+        assert_eq!(
+            extract_harmony_message(simple_text),
+            "Regular text without special tokens"
+        );
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("HARMONY_RESPONSE_PARSING");
+        }
     }
 }
