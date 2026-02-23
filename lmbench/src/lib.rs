@@ -475,9 +475,13 @@ fn get_text_response(
         if aggregated_text.is_empty() {
             eprintln!("warning: no output token found in response");
         }
-        let input_tokens: usize = aggregated_resp.iter().map(|s| s.1).sum::<usize>();
-        let output_tokens: usize = aggregated_resp.iter().map(|s| s.2).sum::<usize>();
-        (vec![aggregated_text], input_tokens, output_tokens)
+        let server_input_tokens: usize = aggregated_resp.iter().map(|s| s.1).sum::<usize>();
+        let server_output_tokens: usize = aggregated_resp.iter().map(|s| s.2).sum::<usize>();
+        (
+            vec![aggregated_text],
+            server_input_tokens,
+            server_output_tokens,
+        )
     } else if content_type.contains("application/json") {
         let json: Value =
             from_str(body).unwrap_or_else(|_| panic!("Failed to parse json body: {}", body));
@@ -514,19 +518,19 @@ fn parse_json_response(
         }
         return (vec![], 0, 0);
     }
-    let input_tokens = if let Some(jq_expr) = cli.get_jq_for_input_tokens() {
+    let server_input_tokens = if let Some(jq_expr) = cli.get_jq_for_input_tokens() {
         let selected = jq::jq(&jq_expr, json);
         selected.iter().filter_map(|v| v.as_u64()).sum::<u64>() as usize
     } else {
         0
     };
-    let output_tokens = if let Some(jq_expr) = cli.get_jq_for_output_tokens() {
+    let server_output_tokens = if let Some(jq_expr) = cli.get_jq_for_output_tokens() {
         let selected = jq::jq(&jq_expr, json);
         selected.iter().filter_map(|v| v.as_u64()).sum::<u64>() as usize
     } else {
         0
     };
-    (text, input_tokens, output_tokens)
+    (text, server_input_tokens, server_output_tokens)
 }
 
 #[cfg(test)]
