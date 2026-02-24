@@ -11,7 +11,7 @@ use client_wrapper::ClientWrapper;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
-use rand::Rng;
+use rand::RngExt;
 use rand_distr::{Distribution, Exp};
 use record::{Record, count_text_tokens};
 use stats::{Stats, generate_stats};
