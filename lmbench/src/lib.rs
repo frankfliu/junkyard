@@ -23,8 +23,10 @@ use harmony_protocol::{HarmonyEncodingName, load_harmony_encoding};
 use serde_json::{Value, from_str, json};
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 #[cfg(feature = "harmony")]
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
@@ -47,12 +49,13 @@ type JobResult = Result<
 pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     let client = ClientWrapper::new(&cli).await?;
 
-    let dataset = load_dataset(&cli).await?;
+    let dataset = Arc::new(load_dataset(&cli).await?);
 
     let mut handles: Vec<JoinHandle<JobResult>> = Vec::new();
     let start_time = Instant::now();
     let test_duration = cli.duration.map(|d| Duration::from_secs(d as u64));
     let total_requests = (cli.clients * cli.repeat) as u64;
+    let index = Arc::new(AtomicUsize::new(0));
 
     let bar = if !cli.silent && total_requests > 1 {
         let bar = ProgressBar::new(total_requests);
@@ -75,6 +78,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         let cli = cli.clone();
         let dataset = dataset.clone();
         let bar = bar.clone();
+        let index = index.clone();
         handles.push(tokio::spawn(async move {
             let mut latencies = Vec::new();
             let mut ttfts = Vec::new();
@@ -83,7 +87,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
             let mut total_server_input_tokens = 0;
             let mut total_server_output_tokens = 0;
             let mut error_requests = 0;
-            for i in 0..cli.repeat {
+            for _ in 0..cli.repeat {
                 if let Some(test_duration) = test_duration
                     && start_time.elapsed() > test_duration
                 {
@@ -94,8 +98,9 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
                     tokio::time::sleep(delay).await;
                 }
 
-                let record = dataset[i as usize % dataset.len()].clone();
-                match process_single_record(&client, &cli, &record, total_requests).await {
+                let i = index.fetch_add(1, Ordering::SeqCst);
+                let record = &dataset[i % dataset.len()];
+                match process_single_record(&client, &cli, record, total_requests).await {
                     Ok((
                         duration,
                         ttft,
