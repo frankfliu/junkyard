@@ -85,3 +85,37 @@ async fn test_main_with_output() {
     assert!(content.contains("headers"));
     assert!(content.contains(r#""benchmark_output_tokens":1"#));
 }
+
+#[tokio::test]
+async fn test_retry_failed_tasks() {
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(POST).path("/test");
+        then.status(200).body("world");
+    });
+
+    tokio::fs::create_dir_all("test").await.unwrap();
+    let dir = tempdir().unwrap();
+    let output_path = dir.path().to_str().unwrap();
+    let dataset_file = dir.path().join("dataset.jsonl");
+    std::fs::write(&dataset_file, "{\"text\":\"Hello\"}\n{\"text\":\"World\"}").unwrap();
+
+    let log_path = dir.path().join("output.log");
+    std::fs::write(&log_path, "{\"task_id\":\"0\"}\n").unwrap();
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("lmbench"));
+    cmd.arg(server.url("/test"))
+        .arg("--dataset")
+        .arg(&dataset_file.to_str().unwrap())
+        .arg("-r")
+        .arg("-o")
+        .arg(output_path);
+
+    cmd.assert().success();
+
+    // Should only call mock server once for task2
+    assert_eq!(mock.calls(), 1);
+
+    let content = std::fs::read_to_string(&log_path).unwrap();
+    assert!(content.contains(r#""task_id":"1"#));
+}

@@ -15,7 +15,14 @@ async fn main() -> ExitCode {
 
     let (file_layer, _guard) = if let Some(output_dir) = &cli.output {
         tokio::fs::create_dir_all(output_dir).await.unwrap();
-        let file = std::fs::File::create(Path::new(output_dir).join("output.log")).unwrap();
+        let log_path = Path::new(output_dir).join("output.log");
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(cli.retry_failed)
+            .truncate(!cli.retry_failed)
+            .open(log_path)
+            .unwrap();
         let (non_blocking, guard) = tracing_appender::non_blocking(file);
         let layer = fmt::layer()
             .with_writer(non_blocking)

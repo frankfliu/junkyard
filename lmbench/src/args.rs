@@ -105,6 +105,10 @@ pub struct Args {
     #[arg(short = 'o', long, value_name = "DIRECTORY")]
     pub output: Option<String>,
 
+    /// Retry failed tasks
+    #[arg(short, long, requires_all = ["dataset", "output"])]
+    pub retry_failed: bool,
+
     /// Silent mode
     #[arg(short, long)]
     pub(crate) silent: bool,

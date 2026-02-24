@@ -8,6 +8,7 @@ pub mod stats;
 
 use args::Args;
 use client_wrapper::ClientWrapper;
+use std::collections::HashSet;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
@@ -278,6 +279,22 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
         return Ok(vec![record]);
     };
 
+    let bar = if !cli.silent {
+        let bar = ProgressBar::new(100);
+        bar.set_draw_target(ProgressDrawTarget::stderr());
+        bar.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "Loading dataset: {spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+                )?
+                .progress_chars("#>-"),
+        );
+        bar.set_position(0);
+        Some(bar)
+    } else {
+        None
+    };
+
     let path = Path::new(path);
     let mut data: Vec<(String, String)> = Vec::new();
     if path.is_dir() {
@@ -323,21 +340,26 @@ async fn load_dataset(cli: &Args) -> Result<Vec<Record>, anyhow::Error> {
         }
     }
 
-    let bar = if !cli.silent {
-        let bar = ProgressBar::new(data.len() as u64);
-        bar.set_draw_target(ProgressDrawTarget::stderr());
-        bar.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    "Loading dataset: {spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
-                )?
-                .progress_chars("#>-"),
-        );
-        bar.set_position(0);
-        Some(bar)
-    } else {
-        None
-    };
+    if cli.retry_failed {
+        if let Some(output_dir) = &cli.output {
+            let output_file = Path::new(output_dir).join("output.log");
+            if output_file.exists() {
+                let content = fs::read_to_string(output_file)?;
+                let mut finished_tasks = HashSet::new();
+                for line in content.lines() {
+                    if let Ok(v) = from_str::<Value>(line) {
+                        let task_id = v["task_id"].as_str().unwrap_or("").to_string();
+                        finished_tasks.insert(task_id);
+                    }
+                }
+                data.retain(|(k, _)| !finished_tasks.contains(k));
+            }
+        }
+    }
+
+    if let Some(bar) = &bar {
+        bar.set_length(data.len() as u64);
+    }
 
     let records = data
         .into_iter()
