@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 from collections import defaultdict
+from datasets import load_dataset
 
 import requests
 from huggingface_hub import HfApi
@@ -64,6 +65,13 @@ def list_models():
             print(f"{k}: {model_id}")
 
 
+def save_dataset(repo_id: str, name):
+    dataset = load_dataset(repo_id, name)
+    test_data = dataset["test"]
+    test_data.to_json("mmlu.jsonl", lines=True, orient="records")
+
+
 if __name__ == "__main__":
     logging.basicConfig(stream=sys.stdout, format="%(message)s", level=logging.INFO)
     list_models()
+    save_dataset("cais/mmlu", "abstract_algebra")

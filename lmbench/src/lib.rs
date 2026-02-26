@@ -8,6 +8,7 @@ pub mod stats;
 
 use args::Args;
 use client_wrapper::ClientWrapper;
+use std::cmp::max;
 use std::collections::HashSet;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
@@ -43,6 +44,7 @@ type JobResult = Result<
         usize,
         usize,
         usize,
+        u128,
     ),
     anyhow::Error,
 >;
@@ -88,6 +90,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
             let mut total_server_input_tokens = 0;
             let mut total_server_output_tokens = 0;
             let mut error_requests = 0;
+            let mut thread_time = 0;
             for _ in 0..cli.repeat {
                 if let Some(test_duration) = test_duration
                     && start_time.elapsed() > test_duration
@@ -116,6 +119,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
                         total_output_tokens += benchmark_output_tokens;
                         total_server_input_tokens += server_input_tokens;
                         total_server_output_tokens += server_output_tokens;
+                        thread_time += duration.as_millis();
                     }
                     Err(_) => {
                         error_requests += 1;
@@ -134,6 +138,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
                 total_server_input_tokens,
                 total_server_output_tokens,
                 error_requests,
+                thread_time,
             ))
         }));
     }
@@ -154,6 +159,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     let mut all_server_input_tokens = 0;
     let mut all_server_output_tokens = 0;
     let mut all_errors = 0;
+    let mut max_thread_time = 0;
     for (
         latencies,
         ttfts,
@@ -162,6 +168,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         total_server_it,
         total_server_ot,
         error_requests,
+        thread_time,
     ) in results
     {
         all_latencies.extend(latencies);
@@ -171,6 +178,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         all_server_input_tokens += total_server_it;
         all_server_output_tokens += total_server_ot;
         all_errors += error_requests;
+        max_thread_time = max(thread_time, max_thread_time)
     }
 
     let stats = generate_stats(
@@ -181,6 +189,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         all_server_input_tokens,
         all_server_output_tokens,
         all_errors,
+        max_thread_time,
     );
     if cli.verbose || total_requests > 1 {
         println!("{}", stats);

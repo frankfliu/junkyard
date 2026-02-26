@@ -92,6 +92,7 @@ pub fn generate_stats(
     server_input_tokens: usize,
     server_output_tokens: usize,
     error_requests: usize,
+    total_time_ms: u128,
 ) -> Stats {
     if latencies.is_empty() {
         return Stats {
@@ -111,8 +112,6 @@ pub fn generate_stats(
     }
 
     let success_requests = latencies.len();
-    let total_time: Duration = latencies.iter().sum();
-    let total_time_ms = total_time.as_millis();
 
     let latency_ms = get_distribution(latencies);
     let ttft_ms = if !ttfts.is_empty() {
@@ -120,15 +119,15 @@ pub fn generate_stats(
     } else {
         None
     };
-
-    let qps = success_requests as f64 / total_time.as_secs_f64();
+    let total_time = total_time_ms as f64 / 1000.;
+    let qps = success_requests as f64 / total_time;
     let (input_tokens, input_tokens_per_min, output_tokens, output_tokens_per_min) =
         if output_tokens > 0 {
             (
                 Some(input_tokens),
-                Some(input_tokens as f64 / total_time.as_secs_f64() * 60.),
+                Some(input_tokens as f64 / total_time * 60.),
                 Some(output_tokens),
-                Some(output_tokens as f64 / total_time.as_secs_f64() * 60.),
+                Some(output_tokens as f64 / total_time * 60.),
             )
         } else {
             (None, None, None, None)
@@ -211,6 +210,7 @@ mod tests {
             0,
             0,
             error_requests,
+            100,
         );
 
         assert_eq!(stats.success_requests, 10);
@@ -246,6 +246,7 @@ mod tests {
             0,
             0,
             error_requests,
+            100,
         );
 
         assert_eq!(stats.success_requests, 0);
