@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-requires = ["setuptools", "setuptools_scm[toml]"]
+requires = ["setuptools>=82.0.0", "setuptools_scm[toml]"]
 
 [project]
 authors = [{"name" = "Frank Liu"}]
@@ -9,14 +9,16 @@ dynamic = ["version"]
 license = "Apache-2.0"
 name = "ptest"
 readme = {file = "README.md", content-type = "text/markdown"}
+requires-python = ">=3.11"
 dependencies = [
+  "datasets>=4.6.1",
   "fastapi",
   "pydantic~=2.0",
   "pydantic-settings",
-  "typer"
+  "typer",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
   "build",
   "dapperdata",
