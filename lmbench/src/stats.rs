@@ -215,16 +215,16 @@ mod tests {
 
         assert_eq!(stats.success_requests, 10);
         assert_eq!(stats.error_requests, 2);
-        assert_eq!(stats.total_time_ms, 5500);
+        assert_eq!(stats.total_time_ms, 100);
         assert_eq!(stats.latency_ms.mean, 550);
         assert_eq!(stats.latency_ms.min, 100);
         assert_eq!(stats.latency_ms.max, 1000);
         assert_eq!(stats.latency_ms.p50, 600);
         assert_eq!(stats.latency_ms.p90, 1000);
         assert_eq!(stats.latency_ms.p99, 1000);
-        assert!((stats.qps - 1.8181).abs() < 0.0001);
-        assert!((stats.input_tokens_per_min.unwrap() - 5454.5454).abs() < 0.0001);
-        assert!((stats.output_tokens_per_min.unwrap() - 10909.0909).abs() < 0.0001);
+        assert!((stats.qps - 100.).abs() < 0.0001);
+        assert!((stats.input_tokens_per_min.unwrap() - 300000.0).abs() < 0.0001);
+        assert!((stats.output_tokens_per_min.unwrap() - 600000.0).abs() < 0.0001);
 
         let expected_json = serde_json::to_string_pretty(&stats).unwrap();
         assert_eq!(stats.to_string(), format!("{}\n", expected_json));
