@@ -51,11 +51,11 @@ impl ClientWrapper {
         &self,
         cli: &Args,
         record: &Record,
-        total_requests: u64,
+        print_to_console: bool,
     ) -> Result<(String, HeaderMap, Duration, Duration), anyhow::Error> {
         match self {
             ClientWrapper::Default(client) => {
-                Self::send_request_default(client, cli, record, total_requests).await
+                Self::send_request_default(client, cli, record, print_to_console).await
             }
             ClientWrapper::Bedrock(client) => {
                 let body = Blob::new(record.body.as_ref().unwrap().as_bytes());
@@ -103,7 +103,7 @@ impl ClientWrapper {
         client: &Client,
         cli: &Args,
         record: &Record,
-        total_requests: u64,
+        print_to_console: bool,
     ) -> Result<(String, HeaderMap, Duration, Duration), anyhow::Error> {
         let request_builder = record.clone().into_request_builder(client);
         tracing::trace!({
@@ -119,14 +119,14 @@ impl ClientWrapper {
         let headers = res.headers().clone();
         let status = res.status();
 
-        if cli.verbose && total_requests == 1 {
+        if cli.verbose && print_to_console {
             println!("Status: {}", status);
             println!("Headers:\n{:#?}", headers);
             println!("Body:");
         }
 
         if !status.is_success() {
-            if total_requests == 1 {
+            if print_to_console {
                 let text = res.text().await?;
                 eprintln!("{}", text);
             }
@@ -139,7 +139,7 @@ impl ClientWrapper {
         let mut first_chunk = true;
         while let Some(item) = stream.next().await {
             let chunk = item?;
-            if total_requests == 1 {
+            if print_to_console {
                 print!("{}", String::from_utf8_lossy(&chunk));
             }
             if first_chunk {
@@ -148,7 +148,7 @@ impl ClientWrapper {
             }
             body_bytes.extend_from_slice(&chunk);
         }
-        if total_requests == 1 {
+        if print_to_console {
             println!();
         }
         Ok((
@@ -164,11 +164,11 @@ impl ClientWrapper {
         &self,
         cli: &Args,
         record: &Record,
-        total_requests: u64,
+        print_to_console: bool,
     ) -> Result<(String, HeaderMap, Duration, Duration), anyhow::Error> {
         match self {
             ClientWrapper::Default(client) => {
-                Self::send_request_default(client, cli, record, total_requests).await
+                Self::send_request_default(client, cli, record, print_to_console).await
             }
         }
     }

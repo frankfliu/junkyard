@@ -28,7 +28,7 @@ use std::path::Path;
 use std::sync::Arc;
 #[cfg(feature = "harmony")]
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
@@ -57,11 +57,11 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
     let mut handles: Vec<JoinHandle<JobResult>> = Vec::new();
     let start_time = Instant::now();
     let test_duration = cli.duration.map(|d| Duration::from_secs(d as u64));
-    let total_requests = (cli.clients * cli.repeat) as u64;
+    let finished_requests = Arc::new(AtomicU32::new(0));
     let index = Arc::new(AtomicUsize::new(0));
 
-    let bar = if !cli.silent && total_requests > 1 {
-        let bar = ProgressBar::new(total_requests);
+    let bar = if !cli.silent && cli.repeat > 1 {
+        let bar = ProgressBar::new(cli.repeat as u64);
         bar.set_draw_target(ProgressDrawTarget::stderr());
         bar.set_style(
             ProgressStyle::default_bar()
@@ -82,6 +82,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         let dataset = dataset.clone();
         let bar = bar.clone();
         let index = index.clone();
+        let finished_requests = finished_requests.clone();
         handles.push(tokio::spawn(async move {
             let mut latencies = Vec::new();
             let mut ttfts = Vec::new();
@@ -91,7 +92,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
             let mut total_server_output_tokens = 0;
             let mut error_requests = 0;
             let mut thread_time = 0;
-            for _ in 0..cli.repeat {
+            while finished_requests.fetch_add(1, Ordering::SeqCst) < cli.repeat {
                 if let Some(test_duration) = test_duration
                     && start_time.elapsed() > test_duration
                 {
@@ -104,7 +105,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
 
                 let i = index.fetch_add(1, Ordering::SeqCst);
                 let record = &dataset[i % dataset.len()];
-                match process_single_record(&client, &cli, record, total_requests).await {
+                match process_single_record(&client, &cli, record, cli.repeat == 1).await {
                     Ok((
                         duration,
                         ttft,
@@ -191,7 +192,7 @@ pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
         all_errors,
         max_thread_time,
     );
-    if cli.verbose || total_requests > 1 {
+    if cli.verbose || cli.repeat > 1 {
         println!("{}", stats);
     }
 
@@ -202,10 +203,10 @@ async fn process_single_record(
     client: &ClientWrapper,
     cli: &Args,
     record: &Record,
-    total_requests: u64,
+    print_to_console: bool,
 ) -> Result<(Duration, Option<Duration>, usize, usize, usize), anyhow::Error> {
     let (body_text, headers, duration, ttft) =
-        client.send_request(cli, record, total_requests).await?;
+        client.send_request(cli, record, print_to_console).await?;
 
     let mut benchmark_output_tokens = 0;
     let mut opt_ttft = Some(ttft);

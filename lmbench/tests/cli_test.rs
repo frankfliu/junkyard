@@ -40,7 +40,7 @@ async fn test_main_with_output() {
         .arg("-d")
         .arg("hello")
         .arg("--repeat")
-        .arg("2")
+        .arg("4")
         .arg("-c")
         .arg("2")
         .arg("--output")
