@@ -153,6 +153,7 @@ gcloud container clusters delete $CLUSTER_NAME --location $LOCATION -q
 gcloud container clusters create $CLUSTER_NAME \
     --project $PROJECT \
     --location $LOCATION \
+    --workload-pool $PROJECT.svc.id.goog \
     --num-nodes 1
 
 gcloud container node-pools create $POOL_NAME \
@@ -162,9 +163,8 @@ gcloud container node-pools create $POOL_NAME \
     --machine-type=e2-standard-4 \
     --disk-type "pd-ssd" --disk-size "300" \
     --enable-autoscaling \
-    --min-nodes 1 \
+    --min-nodes 0 \
     --max-nodes 5 \
-    --num-nodes=1 \
     --scopes "https://www.googleapis.com/auth/devstorage.read_write,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/trace.append"
 
 gcloud container clusters resize $CLUSTER_NAME --node-pool $POOL_NAME \
@@ -177,7 +177,31 @@ gcloud container node-pools update $POOL_NAME \
     --enable-autoscaling \
     --total-min-nodes 1 \
     --total-max-nodes 5
+```
 
+### Update existing cluster to enable workload identity
+
+```
+gcloud container clusters update $CLUSTER_NAME \
+    --location $LOCATION \
+    --workload-pool $PROJECT.svc.id.goog
+
+gcloud container node-pools update $POOL_NAME \
+    --cluster $CLUSTER_NAME \
+    --location $LOCATION \
+    --workload-metadata GKE_METADATA
+
+gcloud iam service-accounts add-iam-policy-binding \
+    my-app-gsa@$PROJECT.iam.gserviceaccount.com \
+    --role roles/iam.workloadIdentityUser \
+    --member "serviceAccount:$PROJECT.svc.id.goog[default/my-app-ksa]"
+
+kubectl create clusterrolebinding lusterrolebinding-name \
+    --clusterrole=cluster-admin \
+    --serviceaccount=admin:my-app-ksa
+```
+
+```
 gcloud container node-pools delete default-pool --cluster $CLUSTER_NAME --location $LOCATION -q
 
 CLUSTER_NAME=$(gcloud container clusters list --project $PROJECT --format="[no-heading](NAME)")
