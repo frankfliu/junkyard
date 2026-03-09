@@ -177,11 +177,17 @@ gcloud container node-pools update $POOL_NAME \
     --enable-autoscaling \
     --total-min-nodes 1 \
     --total-max-nodes 5
+
+kubectl config set-context --current --namespace=$NAMESPACE
 ```
 
 ### Update existing cluster to enable workload identity
 
 ```
+NAMESPACE=default
+GSA_EMAIL=my-app-gsa@$PROJECT.iam.gserviceaccount.com
+KSA=my-app-ksa
+
 gcloud container clusters update $CLUSTER_NAME \
     --location $LOCATION \
     --workload-pool $PROJECT.svc.id.goog
@@ -192,13 +198,15 @@ gcloud container node-pools update $POOL_NAME \
     --workload-metadata GKE_METADATA
 
 gcloud iam service-accounts add-iam-policy-binding \
-    my-app-gsa@$PROJECT.iam.gserviceaccount.com \
+    $GSA_EMAIL \
     --role roles/iam.workloadIdentityUser \
-    --member "serviceAccount:$PROJECT.svc.id.goog[default/my-app-ksa]"
+    --member "serviceAccount:$PROJECT.svc.id.goog[$NAMESPACE/$KSA]"
 
-kubectl create clusterrolebinding lusterrolebinding-name \
+kubectl create clusterrolebinding cluster-binding-name \
     --clusterrole=cluster-admin \
-    --serviceaccount=admin:my-app-ksa
+    --serviceaccount=$NAMESPACE:$KSA
+
+gcloud iam service-accounts get-iam-policy $GSA_EMAIL
 ```
 
 ```
