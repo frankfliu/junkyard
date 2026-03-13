@@ -1,5 +1,7 @@
+use crate::AppState;
 use axum::{
     Json,
+    extract::State,
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Sse, sse::Event},
 };
@@ -251,7 +253,69 @@ fn generate_mock_logprobs(token: &str, num_top: u32) -> Logprobs {
     }
 }
 
+fn generate_mock_from_schema(schema: &Value) -> Value {
+    if let Some(enum_values) = schema.get("enum").and_then(|v| v.as_array()) {
+        if !enum_values.is_empty() {
+            return enum_values[0].clone();
+        }
+    }
+
+    match schema.get("type").and_then(|v| v.as_str()) {
+        Some("string") => json!("mock_string"),
+        Some("number") | Some("integer") => json!(0),
+        Some("boolean") => json!(true),
+        Some("object") => {
+            let mut obj = serde_json::Map::new();
+            if let Some(properties) = schema.get("properties").and_then(|v| v.as_object()) {
+                for (key, sub_schema) in properties {
+                    obj.insert(key.clone(), generate_mock_from_schema(sub_schema));
+                }
+            }
+            Value::Object(obj)
+        }
+        Some("array") => {
+            if let Some(items) = schema.get("items") {
+                json!([generate_mock_from_schema(items)])
+            } else {
+                json!([])
+            }
+        }
+        _ => {
+            // Fallback for schemas without a "type" but with "properties"
+            if schema.get("properties").is_some() {
+                let mut obj = serde_json::Map::new();
+                if let Some(properties) = schema.get("properties").and_then(|v| v.as_object()) {
+                    for (key, sub_schema) in properties {
+                        obj.insert(key.clone(), generate_mock_from_schema(sub_schema));
+                    }
+                }
+                return Value::Object(obj);
+            }
+            json!(null)
+        }
+    }
+}
+
+fn to_json_response<T: Serialize>(
+    status: StatusCode,
+    data: T,
+    pretty: bool,
+) -> axum::response::Response {
+    if pretty {
+        let body = serde_json::to_string_pretty(&data).unwrap();
+        (
+            status,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            body,
+        )
+            .into_response()
+    } else {
+        (status, Json(data)).into_response()
+    }
+}
+
 pub async fn chat_completions_handler(
+    State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<ChatCompletionRequest>,
 ) -> impl IntoResponse {
@@ -264,7 +328,7 @@ pub async fn chat_completions_handler(
                 "code": null
             }
         });
-        return (StatusCode::BAD_REQUEST, Json(error_body)).into_response();
+        return to_json_response(StatusCode::BAD_REQUEST, error_body, state.pretty);
     }
 
     if let Some(mock_type) = headers.get("mock-result-type") {
@@ -277,7 +341,7 @@ pub async fn chat_completions_handler(
                     "code": "missing_required_parameter"
                 }
             });
-            return (StatusCode::BAD_REQUEST, Json(error_body)).into_response();
+            return to_json_response(StatusCode::BAD_REQUEST, error_body, state.pretty);
         }
     }
 
@@ -397,6 +461,48 @@ pub async fn chat_completions_handler(
         None
     };
 
+    let mut tool_calls = None;
+    let mut finish_reason = "stop".to_string();
+    let mut content = Some(Content::Text(
+        "Hello there! How can I help you today?".to_string(),
+    ));
+
+    if let Some(rf) = &payload.response_format {
+        if rf.r#type == "json_object" {
+            content = Some(Content::Text("{\n  \"message\": \"Hello!\"\n}".to_string()));
+        } else if rf.r#type == "json_schema" {
+            if let Some(js) = &rf.json_schema {
+                if let Some(schema) = js.get("schema") {
+                    let mock_val = generate_mock_from_schema(schema);
+                    content = Some(Content::Text(
+                        serde_json::to_string_pretty(&mock_val).unwrap(),
+                    ));
+                }
+            }
+        }
+    }
+
+    if let Some(tools) = &payload.tools {
+        if !tools.is_empty() {
+            let arguments = if let Some(parameters) = &tools[0].function.parameters {
+                let mock_val = generate_mock_from_schema(parameters);
+                serde_json::to_string(&mock_val).unwrap_or_else(|_| "{}".to_string())
+            } else {
+                "{}".to_string()
+            };
+            tool_calls = Some(vec![ToolCall {
+                id: "call_abc123".to_string(),
+                r#type: "function".to_string(),
+                function: FunctionCall {
+                    name: tools[0].function.name.clone(),
+                    arguments,
+                },
+            }]);
+            finish_reason = "tool_calls".to_string();
+            content = None;
+        }
+    }
+
     let response = ChatCompletionResponse {
         id: "chatcmpl-mock".to_string(),
         object: "chat.completion".to_string(),
@@ -409,15 +515,13 @@ pub async fn chat_completions_handler(
             index: 0,
             message: ChatMessage {
                 role: "assistant".to_string(),
-                content: Some(Content::Text(
-                    "Hello there! How can I help you today?".to_string(),
-                )),
+                content,
                 reasoning_content: Some("Thinking about how to help the user...".to_string()),
                 name: None,
-                tool_calls: None,
+                tool_calls,
                 tool_call_id: None,
             },
-            finish_reason: "stop".to_string(),
+            finish_reason,
             matched_stop: Some(200002),
             logprobs,
         }],
@@ -439,5 +543,305 @@ pub async fn chat_completions_handler(
         },
     };
 
-    (StatusCode::OK, Json(response)).into_response()
+    to_json_response(StatusCode::OK, response, state.pretty)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::routing::post;
+    use axum_test::TestServer;
+
+    fn create_test_server() -> TestServer {
+        create_test_server_with_state(AppState { pretty: false })
+    }
+
+    fn create_test_server_with_state(state: AppState) -> TestServer {
+        let app = axum::Router::new()
+            .route("/v1/chat/completions", post(chat_completions_handler))
+            .with_state(state);
+        TestServer::new(app)
+    }
+
+    #[tokio::test]
+    async fn test_pretty_output() {
+        let server = create_test_server_with_state(AppState { pretty: true });
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let text = response.text();
+        // Pretty output should have newlines and indentation
+        assert!(text.contains("\n  \"id\": \"chatcmpl-mock\","));
+    }
+
+    #[tokio::test]
+    async fn test_chat_completions_handler_success() {
+        let server = create_test_server();
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        assert_eq!(body.model, "gpt-4");
+        assert_eq!(body.choices[0].message.role, "assistant");
+        assert!(body.choices[0].logprobs.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_chat_completions_handler_logprobs() {
+        let server = create_test_server();
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "logprobs": true,
+            "top_logprobs": 2
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        let logprobs = body.choices[0].logprobs.as_ref().unwrap();
+        let content = logprobs.content.as_ref().unwrap();
+        assert_eq!(content[0].top_logprobs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_chat_completions_handler_streaming() {
+        let server = create_test_server();
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": true
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+
+        // SSE responses are returned as text chunks.
+        let text = response.text();
+        assert!(text.contains("data: {\"id\":\"chatcmpl-mock\""));
+        assert!(text.contains("data: [DONE]"));
+    }
+
+    #[tokio::test]
+    async fn test_chat_completions_handler_errors() {
+        let server = create_test_server();
+
+        // Empty messages error
+        let payload_empty = json!({
+            "model": "gpt-4",
+            "messages": []
+        });
+        let res_empty = server
+            .post("/v1/chat/completions")
+            .json(&payload_empty)
+            .await;
+        res_empty.assert_status(StatusCode::BAD_REQUEST);
+        assert_eq!(
+            res_empty.json::<Value>()["error"]["message"],
+            "[] is too short - 'messages'"
+        );
+
+        // Mock invalid parameter error via header
+        let payload_valid = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+        let res_mock = server
+            .post("/v1/chat/completions")
+            .add_header("mock-result-type", "Invalid parameter")
+            .json(&payload_valid)
+            .await;
+        res_mock.assert_status(StatusCode::BAD_REQUEST);
+        assert_eq!(
+            res_mock.json::<Value>()["error"]["code"],
+            "missing_required_parameter"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_with_tools() {
+        let server = create_test_server();
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "What's the weather?"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get the current weather in a given location",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {
+                                    "type": "string",
+                                    "description": "The city and state, e.g. San Francisco, CA"
+                                },
+                                "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+                            },
+                            "required": ["location"]
+                        }
+                    }
+                }
+            ],
+            "tool_choice": "auto"
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        assert_eq!(body.object, "chat.completion");
+        let choice = &body.choices[0];
+        assert_eq!(choice.finish_reason, "tool_calls");
+        let tool_calls = choice.message.tool_calls.as_ref().unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].function.name, "get_weather");
+        let arguments: Value = serde_json::from_str(&tool_calls[0].function.arguments).unwrap();
+        assert_eq!(arguments["location"], "mock_string");
+        assert_eq!(arguments["unit"], "celsius");
+    }
+
+    #[tokio::test]
+    async fn test_create_with_tools_array() {
+        let server = create_test_server();
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Analyze these numbers"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "analyze_numbers",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "numbers": {
+                                    "type": "array",
+                                    "items": {"type": "number"}
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        let tool_calls = body.choices[0].message.tool_calls.as_ref().unwrap();
+        let arguments: Value = serde_json::from_str(&tool_calls[0].function.arguments).unwrap();
+        assert_eq!(arguments["numbers"], json!([0]));
+    }
+
+    #[tokio::test]
+    async fn test_create_with_response_format() {
+        let server = create_test_server();
+        let payload = json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Output a JSON object with a 'name' field"}],
+            "response_format": { "type": "json_object" }
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        if let Some(Content::Text(text)) = &body.choices[0].message.content {
+            let _: Value = serde_json::from_str(text).expect("Response should be valid JSON");
+            assert!(text.contains("\"message\": \"Hello!\""));
+        } else {
+            panic!("Expected text content");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_with_structured_outputs() {
+        let server = create_test_server();
+        let payload = json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "What is the capital of France?"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "answer",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "answer": { "type": "string" }
+                        },
+                        "required": ["answer"],
+                        "additionalProperties": false
+                    },
+                    "strict": true
+                }
+            }
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        if let Some(Content::Text(text)) = &body.choices[0].message.content {
+            let val: Value = serde_json::from_str(text).expect("Response should be valid JSON");
+            assert_eq!(val["answer"], "mock_string");
+        } else {
+            panic!("Expected text content");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_with_content_parts() {
+        let server = create_test_server();
+        let payload = json!({
+            "model": "gpt-4o",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What's in this image?"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gnome-home.svg/1200px-Gnome-home.svg.png",
+                                "detail": "high"
+                            }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+    }
+
+    #[tokio::test]
+    async fn test_create_with_all_params() {
+        let server = create_test_server();
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "frequency_penalty": 0.5,
+            "presence_penalty": 0.5,
+            "max_completion_tokens": 100,
+            "n": 1,
+            "seed": 42,
+            "stop": ["\n", "User:"],
+            "temperature": 0.8,
+            "top_p": 1.0,
+            "user": "test-user"
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        assert_eq!(body.usage.total_tokens, 20);
+    }
 }
