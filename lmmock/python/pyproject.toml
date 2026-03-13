@@ -1,0 +1,38 @@
+[project]
+description = "OpenAI compatibility test suite"
+name = "openai-cts"
+readme = "README.md"
+requires-python = ">=3.13"
+version = "0.1.0"
+
+dependencies = [
+  "openai>=2.26.0",
+]
+
+[project.scripts]
+openai-cts = "openai_cts.main:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.tomlsort]
+all = true
+in_place = true
+sort_first = ["project", "tool"]
+
+[tool.uv]
+package = true
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[dependency-groups]
+dev = [
+  "ruff",
+  "toml-sort"
+]
