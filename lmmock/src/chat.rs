@@ -10,6 +10,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::io::Write;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MockResponse {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<ChatCompletionResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream_content: Option<ChatCompletionChunk>,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
@@ -108,6 +119,12 @@ pub struct FunctionDefinition {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ExtraBody {
+    pub request_id: Option<String>,
+    pub timestamp: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChatCompletionRequest {
     pub messages: Vec<ChatMessage>,
     pub model: String,
@@ -136,9 +153,10 @@ pub struct ChatCompletionRequest {
     pub tool_choice: Option<Value>,
     pub parallel_tool_calls: Option<bool>,
     pub user: Option<String>,
+    pub extra_body: Option<ExtraBody>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChatCompletionResponse {
     pub id: String,
     pub object: String,
@@ -154,7 +172,7 @@ pub struct ChatCompletionResponse {
     pub system_fingerprint: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChatCompletionChunk {
     pub id: String,
     pub object: String,
@@ -167,7 +185,7 @@ pub struct ChatCompletionChunk {
     pub system_fingerprint: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Choice {
     pub index: u32,
     pub message: ChatMessage,
@@ -317,8 +335,30 @@ fn to_json_response<T: Serialize>(
 pub async fn chat_completions_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<ChatCompletionRequest>,
+    Json(mut payload): Json<ChatCompletionRequest>,
 ) -> impl IntoResponse {
+    if let Some(request_log) = &state.request_log {
+        if let Ok(mut file) = request_log.lock() {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            let eb = payload.extra_body.get_or_insert_with(|| ExtraBody {
+                request_id: None,
+                timestamp: None,
+            });
+            eb.timestamp = Some(now);
+
+            if eb.request_id.is_none() {
+                eb.request_id = Some(format!("req-{}", now));
+            }
+
+            let _ = serde_json::to_writer(&mut *file, &payload);
+            let _ = writeln!(file);
+        }
+    }
+
     if payload.messages.is_empty() {
         let error_body = json!({
             "error": {
@@ -347,6 +387,47 @@ pub async fn chat_completions_handler(
 
     let logprobs_enabled = payload.logprobs.unwrap_or(false);
     let top_logprobs = payload.top_logprobs.unwrap_or(0);
+
+    if let Some(responses_map) = &state.responses_map {
+        let request_id = payload
+            .extra_body
+            .as_ref()
+            .and_then(|eb| eb.request_id.clone());
+
+        if let Some(id) = request_id {
+            if let Some(mock_resp) = responses_map.get(&id) {
+                let is_stream = payload.stream.unwrap_or(false);
+                if is_stream {
+                    if let Some(chunk) = &mock_resp.stream_content {
+                        let chunk = chunk.clone();
+                        let stream = stream::unfold(0, move |state| {
+                            let chunk = chunk.clone();
+                            async move {
+                                match state {
+                                    0 => Some((
+                                        Ok::<_, Infallible>(
+                                            Event::default().json_data(chunk).unwrap(),
+                                        ),
+                                        1,
+                                    )),
+                                    1 => Some((
+                                        Ok::<_, Infallible>(Event::default().data("[DONE]")),
+                                        2,
+                                    )),
+                                    _ => None,
+                                }
+                            }
+                        });
+                        return Sse::new(stream)
+                            .keep_alive(axum::response::sse::KeepAlive::new())
+                            .into_response();
+                    }
+                } else if let Some(resp) = &mock_resp.content {
+                    return to_json_response(StatusCode::OK, resp.clone(), state.pretty);
+                }
+            }
+        }
+    }
 
     if payload.stream.unwrap_or(false) {
         let model = payload.model.clone();
@@ -551,9 +632,18 @@ mod tests {
     use super::*;
     use axum::routing::post;
     use axum_test::TestServer;
+    use std::collections::HashMap;
+    use std::fs::File;
+    use std::io::Write;
+    use std::sync::{Arc, Mutex};
 
     fn create_test_server() -> TestServer {
-        create_test_server_with_state(AppState { pretty: false })
+        create_test_server_with_state(AppState {
+            pretty: false,
+            output: None,
+            responses_map: None,
+            request_log: None,
+        })
     }
 
     fn create_test_server_with_state(state: AppState) -> TestServer {
@@ -565,7 +655,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_pretty_output() {
-        let server = create_test_server_with_state(AppState { pretty: true });
+        let server = create_test_server_with_state(AppState {
+            pretty: true,
+            output: None,
+            responses_map: None,
+            request_log: None,
+        });
         let payload = json!({
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "Hello"}]
@@ -797,6 +892,393 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_record_request() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let output_path = temp_dir.path().to_str().unwrap().to_string();
+        let log_path = temp_dir.path().join("requests.jsonlines");
+        let file = File::create(&log_path).unwrap();
+
+        let server = create_test_server_with_state(AppState {
+            pretty: false,
+            output: Some(output_path.clone()),
+            responses_map: None,
+            request_log: Some(Arc::new(Mutex::new(file))),
+        });
+
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}]
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+
+        // Check if file was created
+        assert!(log_path.exists());
+        let content = std::fs::read_to_string(log_path).unwrap();
+        let logged_payload: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(logged_payload["model"], "gpt-4");
+        assert!(logged_payload["extra_body"]["timestamp"].is_number());
+        assert!(logged_payload["extra_body"]["request_id"].is_string());
+    }
+
+    #[tokio::test]
+    async fn test_mock_responses() {
+        let mut responses_map = HashMap::new();
+        let mock_resp = ChatCompletionResponse {
+            id: "chatcmpl-test".to_string(),
+            object: "chat.completion".to_string(),
+            created: 123456789,
+            model: "gpt-4".to_string(),
+            choices: vec![Choice {
+                index: 0,
+                message: ChatMessage {
+                    role: "assistant".to_string(),
+                    content: Some(Content::Text("Custom response".to_string())),
+                    reasoning_content: None,
+                    name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                finish_reason: "stop".to_string(),
+                matched_stop: None,
+                logprobs: None,
+            }],
+            usage: Usage {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+                reasoning_tokens: None,
+                prompt_tokens_details: None,
+                completion_tokens_details: None,
+            },
+            metadata: None,
+            service_tier: None,
+            system_fingerprint: None,
+        };
+        responses_map.insert(
+            "test-user".to_string(),
+            MockResponse {
+                id: "test-user".to_string(),
+                content: Some(mock_resp),
+                stream_content: None,
+            },
+        );
+
+        let server = create_test_server_with_state(AppState {
+            pretty: false,
+            output: None,
+            responses_map: Some(responses_map),
+            request_log: None,
+        });
+
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "extra_body": {
+                "request_id": "test-user"
+            }
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        if let Some(Content::Text(text)) = &body.choices[0].message.content {
+            assert_eq!(text, "Custom response");
+        } else {
+            panic!("Expected text content");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mock_responses_by_id() {
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let mock_response_json = json!({
+            "id": "req-123",
+            "content": {
+                "id": "chatcmpl-req-123",
+                "object": "chat.completion",
+                "created": 123456789,
+                "model": "gpt-4",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "ID-based response"
+                    },
+                    "finish_reason": "stop"
+                }],
+                "usage": {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0
+                }
+            }
+        });
+
+        {
+            let mut file = File::create(temp_file.path()).unwrap();
+            writeln!(file, "{}", mock_response_json).unwrap();
+        }
+
+        let mut responses_map = HashMap::new();
+        let mock_resp: MockResponse = serde_json::from_value(mock_response_json).unwrap();
+        responses_map.insert("req-123".to_string(), mock_resp);
+
+        let server = create_test_server_with_state(AppState {
+            pretty: false,
+            output: None,
+            responses_map: Some(responses_map),
+            request_log: None,
+        });
+
+        // Test with extra_body
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "extra_body": {
+                "request_id": "req-123"
+            }
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        assert_eq!(body.id, "chatcmpl-req-123");
+        if let Some(Content::Text(text)) = &body.choices[0].message.content {
+            assert_eq!(text, "ID-based response");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mock_responses_by_extra_body_id() {
+        let mut responses_map = HashMap::new();
+        let mock_resp = ChatCompletionResponse {
+            id: "chatcmpl-extra-req-123".to_string(),
+            object: "chat.completion".to_string(),
+            created: 123456789,
+            model: "gpt-4".to_string(),
+            choices: vec![Choice {
+                index: 0,
+                message: ChatMessage {
+                    role: "assistant".to_string(),
+                    content: Some(Content::Text("Extra-based response".to_string())),
+                    reasoning_content: None,
+                    name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                finish_reason: "stop".to_string(),
+                matched_stop: None,
+                logprobs: None,
+            }],
+            usage: Usage {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+                reasoning_tokens: None,
+                prompt_tokens_details: None,
+                completion_tokens_details: None,
+            },
+            metadata: None,
+            service_tier: None,
+            system_fingerprint: None,
+        };
+        responses_map.insert(
+            "extra-req-123".to_string(),
+            MockResponse {
+                id: "extra-req-123".to_string(),
+                content: Some(mock_resp),
+                stream_content: None,
+            },
+        );
+
+        let server = create_test_server_with_state(AppState {
+            pretty: false,
+            output: None,
+            responses_map: Some(responses_map),
+            request_log: None,
+        });
+
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "extra_body": {
+                "request_id": "extra-req-123"
+            }
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let body: ChatCompletionResponse = response.json();
+        assert_eq!(body.id, "chatcmpl-extra-req-123");
+        if let Some(Content::Text(text)) = &body.choices[0].message.content {
+            assert_eq!(text, "Extra-based response");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mock_streaming_responses() {
+        let mut responses_map = HashMap::new();
+        let mock_chunk = ChatCompletionChunk {
+            id: "chatcmpl-streaming-mock".to_string(),
+            object: "chat.completion.chunk".to_string(),
+            created: 123456789,
+            model: "gpt-4".to_string(),
+            choices: vec![ChunkChoice {
+                index: 0,
+                delta: ChatMessageDelta {
+                    role: Some("assistant".to_string()),
+                    content: Some("Streaming response".to_string()),
+                    reasoning_content: None,
+                    tool_calls: None,
+                },
+                finish_reason: Some("stop".to_string()),
+                logprobs: None,
+            }],
+            usage: None,
+            system_fingerprint: None,
+        };
+        responses_map.insert(
+            "streaming-id".to_string(),
+            MockResponse {
+                id: "streaming-id".to_string(),
+                content: None,
+                stream_content: Some(mock_chunk),
+            },
+        );
+
+        let server = create_test_server_with_state(AppState {
+            pretty: false,
+            output: None,
+            responses_map: Some(responses_map),
+            request_log: None,
+        });
+
+        let payload = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": true,
+            "extra_body": {
+                "request_id": "streaming-id"
+            }
+        });
+
+        let response = server.post("/v1/chat/completions").json(&payload).await;
+        response.assert_status_ok();
+        let text = response.text();
+        assert!(text.contains("chatcmpl-streaming-mock"));
+        assert!(text.contains("Streaming response"));
+        assert!(text.contains("data: [DONE]"));
+    }
+
+    #[tokio::test]
+    async fn test_mock_dual_responses() {
+        let mut responses_map = HashMap::new();
+        let mock_resp = ChatCompletionResponse {
+            id: "chatcmpl-non-streaming".to_string(),
+            object: "chat.completion".to_string(),
+            created: 123456789,
+            model: "gpt-4".to_string(),
+            choices: vec![Choice {
+                index: 0,
+                message: ChatMessage {
+                    role: "assistant".to_string(),
+                    content: Some(Content::Text("Non-streaming response".to_string())),
+                    reasoning_content: None,
+                    name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                finish_reason: "stop".to_string(),
+                matched_stop: None,
+                logprobs: None,
+            }],
+            usage: Usage {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+                reasoning_tokens: None,
+                prompt_tokens_details: None,
+                completion_tokens_details: None,
+            },
+            metadata: None,
+            service_tier: None,
+            system_fingerprint: None,
+        };
+        let mock_chunk = ChatCompletionChunk {
+            id: "chatcmpl-streaming".to_string(),
+            object: "chat.completion.chunk".to_string(),
+            created: 123456789,
+            model: "gpt-4".to_string(),
+            choices: vec![ChunkChoice {
+                index: 0,
+                delta: ChatMessageDelta {
+                    role: Some("assistant".to_string()),
+                    content: Some("Streaming response".to_string()),
+                    reasoning_content: None,
+                    tool_calls: None,
+                },
+                finish_reason: Some("stop".to_string()),
+                logprobs: None,
+            }],
+            usage: None,
+            system_fingerprint: None,
+        };
+
+        responses_map.insert(
+            "dual-id".to_string(),
+            MockResponse {
+                id: "dual-id".to_string(),
+                content: Some(mock_resp),
+                stream_content: Some(mock_chunk),
+            },
+        );
+
+        let server = create_test_server_with_state(AppState {
+            pretty: false,
+            output: None,
+            responses_map: Some(responses_map),
+            request_log: None,
+        });
+
+        // Test non-streaming
+        let payload_non_stream = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": false,
+            "extra_body": {
+                "request_id": "dual-id"
+            }
+        });
+        let res_non_stream = server
+            .post("/v1/chat/completions")
+            .json(&payload_non_stream)
+            .await;
+        res_non_stream.assert_status_ok();
+        let body: ChatCompletionResponse = res_non_stream.json();
+        assert_eq!(body.id, "chatcmpl-non-streaming");
+
+        // Test streaming
+        let payload_stream = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": true,
+            "extra_body": {
+                "request_id": "dual-id"
+            }
+        });
+        let res_stream = server
+            .post("/v1/chat/completions")
+            .json(&payload_stream)
+            .await;
+        res_stream.assert_status_ok();
+        let text = res_stream.text();
+        assert!(text.contains("chatcmpl-streaming"));
+        assert!(text.contains("Streaming response"));
+    }
+
+    #[tokio::test]
     async fn test_create_with_content_parts() {
         let server = create_test_server();
         let payload = json!({
@@ -809,7 +1291,7 @@ mod tests {
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gnome-home.svg/1200px-Gnome-home.svg.png",
+                                "url": "http://localhost/my.png",
                                 "detail": "high"
                             }
                         }
