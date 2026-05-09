@@ -7,6 +7,8 @@ from openai import OpenAI
 from pydantic import BaseModel
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+MODEL = "gemini-flash-latest"
+IMAGE_GEN_MODEL = "imagen-4.0-generate-001"
 
 
 def text_generation(client: OpenAI, thinking: bool = False, stream: bool = False):
@@ -15,7 +17,7 @@ def text_generation(client: OpenAI, thinking: bool = False, stream: bool = False
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer GEMINI_API_KEY" \
     -d '{
-        "model": "gemini-2.5-flash-preview-05-20",
+        "model": "'$MODEL'",
         "reasoning_effort": "low",
         "stream": true,
         "messages": [
@@ -26,7 +28,7 @@ def text_generation(client: OpenAI, thinking: bool = False, stream: bool = False
     """
 
     response = client.chat.completions.create(
-        model="gemini-2.5-flash-preview-05-20",
+        model=MODEL,
         reasoning_effort="low" if thinking else None,
         stream=stream,
         messages=[
@@ -41,14 +43,15 @@ def text_generation(client: OpenAI, thinking: bool = False, stream: bool = False
         print(response.choices[0].message)
 
 
-def list_models(client: OpenAI):
+def list_models(client: OpenAI, exclude_preview: bool = False):
     models = client.models.list()
     for model in models:
-        print(model.id)
+        if not exclude_preview or "preview" not in model.id:
+            print(model.id)
 
 
 def get_model(client: OpenAI):
-    model = client.models.retrieve("gemini-2.5-flash-preview-05-20")
+    model = client.models.retrieve(MODEL)
     print(model.id)
 
 
@@ -75,9 +78,7 @@ def function_call(client: OpenAI):
     ]
 
     messages = [{"role": "user", "content": "What's the weather like in Chicago today?"}]
-    response = client.chat.completions.create(
-        model="gemini-2.5-flash-preview-05-20", messages=messages, tools=tools, tool_choice="auto"
-    )
+    response = client.chat.completions.create(model=MODEL, messages=messages, tools=tools, tool_choice="auto")
     print(response)
 
 
@@ -88,7 +89,7 @@ def structured_output(client: OpenAI):
         participants: list[str]
 
     response = client.beta.chat.completions.parse(
-        model="gemini-2.5-flash-preview-05-20",
+        model=MODEL,
         messages=[
             {"role": "system", "content": "Extract the event information."},
             {"role": "user", "content": "John and Susan are going to an AI conference on Friday."},
@@ -108,7 +109,7 @@ def image_understanding(client: OpenAI):
     base64_image = encode_image(os.path.expanduser("~/source/samples/kitten.jpg"))
 
     response = client.chat.completions.create(
-        model="gemini-2.5-flash-preview-05-20",
+        model=MODEL,
         messages=[
             {
                 "role": "user",
@@ -130,7 +131,7 @@ def image_understanding(client: OpenAI):
 
 def image_generation(client: OpenAI):
     response = client.images.generate(
-        model="imagen-3.0-generate-002",
+        model=IMAGE_GEN_MODEL,
         prompt="A small kitten with distinctive brown, black, and some grey striped fur, typical of a tabby pattern with eyes tightly closed",
         response_format="b64_json",
         n=1,
@@ -147,7 +148,7 @@ def audio_understanding(client: OpenAI):
         base64_audio = base64.b64encode(audio_file.read()).decode("utf-8")
 
     response = client.chat.completions.create(
-        model="gemini-2.5-flash-preview-05-20",
+        model=MODEL,
         messages=[
             {
                 "role": "user",
@@ -166,7 +167,7 @@ def audio_understanding(client: OpenAI):
 
 def main():
     client = OpenAI(api_key=GEMINI_API_KEY, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
-    list_models(client)
+    list_models(client, exclude_preview=False)
     # get_model(client)
     # text_generation(client, thinking=True, stream=True)
     # function_call(client)

@@ -151,13 +151,20 @@ def web_search(client: AnthropicVertex, stream: bool = False):
     _print_message(message, stream)
 
 
-def tool_search(client: AnthropicVertex, stream: bool = False):
+def tool_search(client: AnthropicVertex, bm25: bool = False, stream: bool = False):
+    if bm25:
+        tool_name = "tool_search_tool_bm25"
+        tool_type = "tool_search_tool_bm25_20251119"
+    else:
+        tool_name = "tool_search_tool_regex"
+        tool_type = "tool_search_tool_regex_20251119"
+
     message = client.messages.create(
         model=MODEL,
         max_tokens=2048,
         stream=stream,
         tools=[
-            {"type": "tool_search_tool_regex_20251119", "name": "tool_search_tool_regex"},
+            {"type": tool_type, "name": tool_name},
             {
                 "name": "get_weather",
                 "description": "Get the weather at a specific location",
@@ -190,6 +197,37 @@ def tool_search(client: AnthropicVertex, stream: bool = False):
     _print_message(message, stream)
 
 
+def structured_outputs(client: AnthropicVertex, stream: bool = False):
+    message = client.messages.create(
+        model=MODEL,
+        max_tokens=2048,
+        stream=stream,
+        messages=[
+            {
+                "role": "user",
+                "content": "Extract the key information from this email: John Smith (john@example.com) is interested in our Enterprise plan and wants to schedule a demo for next Tuesday at 2pm.",
+            }
+        ],
+        output_config={
+            "format": {
+                "type": "json_schema",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "email": {"type": "string"},
+                        "plan_interest": {"type": "string"},
+                        "demo_requested": {"type": "boolean"},
+                    },
+                    "required": ["name", "email", "plan_interest", "demo_requested"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+    )
+    _print_message(message, stream)
+
+
 def main():
     client = AnthropicVertex(project_id=PROJECT_ID, region=REGION)
     text_generation(client, stream=True)
@@ -200,7 +238,8 @@ def main():
     # prompt_caching(client, stream=True)
     # text_editor(client, stream=True)
     # web_search(client, stream=True)
-    # tool_search(client, stream=True)
+    # tool_search(client, bm25=True)
+    # structured_outputs(client, stream=True)
 
 
 if __name__ == "__main__":
