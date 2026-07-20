@@ -45,6 +45,7 @@ def text_generation(client: OpenAI, thinking: bool = False, stream: bool = False
 
 def list_models(client: OpenAI, exclude_preview: bool = False):
     models = client.models.list()
+    models = sorted(models, key=lambda m: m.id)
     for model in models:
         if not exclude_preview or "preview" not in model.id:
             print(model.id)

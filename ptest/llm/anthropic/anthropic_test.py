@@ -4,7 +4,7 @@ from anthropic import AnthropicVertex
 
 PROJECT_ID = os.environ.get("PROJECT")
 REGION = os.environ.get("LOCATION", "global")
-MODEL = os.environ.get("MODEL", "claude-sonnet-4-6@default")
+MODEL = os.environ.get("MODEL", "claude-sonnet-4-7@default")
 
 
 def _print_message(message, stream: bool = False):
@@ -74,7 +74,7 @@ def bash(client: AnthropicVertex, stream: bool = False):
 
 
 def computer_use(client: AnthropicVertex, stream: bool = False):
-    if "opus" in MODEL or "claude-sonnet-4-6" in MODEL:
+    if "opus" in MODEL or "claude-sonnet" in MODEL:
         beta = "computer-use-2025-11-24"
         tool_type = "computer_20251124"
     else:
@@ -228,9 +228,19 @@ def structured_outputs(client: AnthropicVertex, stream: bool = False):
     _print_message(message, stream)
 
 
+def list_models():
+    from anthropic import Anthropic
+
+    client = Anthropic()
+    page = client.models.list()
+    for data in page.data:
+        print(data)
+
+
 def main():
     client = AnthropicVertex(project_id=PROJECT_ID, region=REGION)
-    text_generation(client, stream=True)
+    list_models()
+    # text_generation(client, stream=True)
     # function_call(client, stream=True)
     # bash(client, stream=True)
     # computer_use(client, stream=True)

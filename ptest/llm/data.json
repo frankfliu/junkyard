@@ -11,7 +11,7 @@
       "gemini-flash-latest",
       "gemini-pro-latest",
       "gemini-3.1-flash-lite",
-      "gemini-2.5-flash",
+      "gemini-3.5-flash",
       "gemini-2.5-pro"
     ],
     "features": [
@@ -915,10 +915,11 @@
   },
   "anthropic": {
     "models": [
+      "claude-sonnet-5@default",
       "claude-sonnet-4-6@default",
-      "claude-sonnet-4-5@20250929",
+      "claude-fable-5@default",
+      "claude-opus-4-8@default",
       "claude-opus-4-7@default",
-      "claude-opus-4-6@default",
       "claude-haiku-4-5@20251001"
     ],
     "features": [
