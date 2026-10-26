@@ -81,6 +81,43 @@ gcloud iam service-accounts get-iam-policy $SERVICE_ACCOUNT
 gcloud projects get-iam-policy $PROJECT
 ```
 
+## orangization
+
+```bash
+export ORG_ID=$(gcloud organizations list --format='value(ID)')
+export ORG_DOMAIN=$(gcloud organizations list --format='value(DISPLAY_NAME)') 
+gcloud identity groups create eng@$ORG_DOMAIN \
+    --organization="$ORG_ID" \
+    --display-name="Engineers team" \
+    --description="Engineers with dev access"
+
+
+# Add the new engineer (repeat for each person)
+gcloud identity groups memberships add \
+    --group-email=eng@$ORG_DOMAIN \
+    --member-email=huangyp@$ORG_DOMAIN
+
+for ROLE in \
+  roles/viewer \
+  roles/container.admin \
+  roles/storage.admin \
+  roles/secretmanager.secretAccessor \
+  roles/tpu.admin \
+  roles/compute.instanceAdmin.v1 \
+  roles/iam.serviceAccountUser \
+  roles/cloudbuild.builds.editor \
+  roles/artifactregistry.writer \
+  roles/logging.viewer \
+  roles/monitoring.viewer \
+  roles/serviceusage.serviceUsageConsumer \
+  roles/iap.tunnelResourceAccessor \
+  roles/compute.osAdminLogin
+do
+  gcloud projects add-iam-policy-binding "$PROJECT" \
+    --member="group:eng@$ORG_DOMAIN" --role="$ROLE" --condition=None
+done
+```
+
 ## GAR
 
 ```bash

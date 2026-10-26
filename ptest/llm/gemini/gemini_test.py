@@ -1,14 +1,17 @@
 import base64
 import os
+import subprocess
 from io import BytesIO
 
+import requests
 from PIL import Image
 from openai import OpenAI
 from pydantic import BaseModel
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-MODEL = "gemini-flash-latest"
+MODEL = "gemini-3.5-flash"
 IMAGE_GEN_MODEL = "imagen-4.0-generate-001"
+PROJECT_ID = os.environ.get("PROJECT_ID")
 
 
 def text_generation(client: OpenAI, thinking: bool = False, stream: bool = False):
@@ -54,6 +57,24 @@ def list_models(client: OpenAI, exclude_preview: bool = False):
 def get_model(client: OpenAI):
     model = client.models.retrieve(MODEL)
     print(model.id)
+
+
+def list_vertex_models(project_id: str):
+    """
+    curl "https://aiplatform.googleapis.com/v1beta1/publishers/google/models?pageSize=200" \
+    -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+    -H "x-goog-user-project: ${PROJECT_ID}"
+    """
+    token = subprocess.check_output(["gcloud", "auth", "print-access-token"], text=True).strip()
+    headers = {"Authorization": f"Bearer {token}", "x-goog-user-project": project_id}
+    url = "https://aiplatform.googleapis.com/v1beta1/publishers/google/models"
+    params = {"pageSize": 200}
+    response = requests.get(url, headers=headers, params=params)
+    response.raise_for_status()
+    data = response.json().get("publisherModels", [])
+    data = sorted(data, key=lambda m: m["name"])
+    for model in data:
+        print(model["name"].replace("publishers/google/models/", "google/"))
 
 
 def function_call(client: OpenAI):
@@ -168,7 +189,8 @@ def audio_understanding(client: OpenAI):
 
 def main():
     client = OpenAI(api_key=GEMINI_API_KEY, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
-    list_models(client, exclude_preview=False)
+    list_vertex_models(PROJECT_ID)
+    # list_models(client, exclude_preview=False)
     # get_model(client)
     # text_generation(client, thinking=True, stream=True)
     # function_call(client)
