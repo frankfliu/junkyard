@@ -125,7 +125,12 @@ pub async fn run(mut cli: Args) -> Result<Stats, anyhow::Error> {
                         total_server_output_tokens += server_output_tokens;
                         thread_time += duration.as_millis();
                     }
-                    Err(_) => {
+                    Err(e) => {
+                        tracing::error!(
+                            target: "error_log",
+                            task_id = record.id,
+                            error = format!("{:#}", e),
+                        );
                         error_requests += 1;
                     }
                 }

@@ -113,7 +113,9 @@ impl ClientWrapper {
         let start = Instant::now();
         let mut ttft = Duration::from_secs(0);
         let res = request_builder.send().await.map_err(|e| {
-            eprintln!("request send error: {:?}", e);
+            if print_to_console || cli.output.is_none() {
+                eprintln!("request send error: {:?}", e);
+            }
             e
         })?;
         let headers = res.headers().clone();
@@ -126,11 +128,15 @@ impl ClientWrapper {
         }
 
         if !status.is_success() {
+            let text = res.text().await.unwrap_or_default();
             if print_to_console {
-                let text = res.text().await?;
                 eprintln!("{}", text);
             }
-            return Err(anyhow::anyhow!("request failed: {}", status));
+            return Err(anyhow::anyhow!(
+                "request failed: {}, body: {}",
+                status,
+                text
+            ));
         }
 
         let mut stream = res.bytes_stream();
