@@ -49,10 +49,13 @@ type JobResult = Result<
     anyhow::Error,
 >;
 
-pub async fn run(cli: Args) -> Result<Stats, anyhow::Error> {
+pub async fn run(mut cli: Args) -> Result<Stats, anyhow::Error> {
     let client = ClientWrapper::new(&cli).await?;
 
     let dataset = Arc::new(load_dataset(&cli).await?);
+    if cli.repeat == 0 {
+        cli.repeat = dataset.len() as u32;
+    }
 
     let mut handles: Vec<JoinHandle<JobResult>> = Vec::new();
     let start_time = Instant::now();

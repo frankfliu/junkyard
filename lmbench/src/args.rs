@@ -93,7 +93,7 @@ pub struct Args {
     #[arg(short, long)]
     pub model_id: Option<String>,
 
-    /// Number of requests to perform
+    /// Number of requests to perform (0 = run each dataset record once)
     #[arg(short = 'N', long, default_value_t = 1)]
     pub(crate) repeat: u32,
 

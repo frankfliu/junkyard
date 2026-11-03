@@ -119,3 +119,33 @@ async fn test_retry_failed_tasks() {
     let content = std::fs::read_to_string(&log_path).unwrap();
     assert!(content.contains(r#""task_id":"1"#));
 }
+
+#[tokio::test]
+async fn test_repeat_zero_runs_all_records() {
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(POST).path("/test");
+        then.status(200).body("world");
+    });
+
+    let dir = tempdir().unwrap();
+    let dataset_file = dir.path().join("dataset.jsonl");
+    std::fs::write(
+        &dataset_file,
+        "{\"text\":\"a\"}\n{\"text\":\"b\"}\n{\"text\":\"c\"}",
+    )
+    .unwrap();
+
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("lmbench"));
+    cmd.arg(server.url("/test"))
+        .arg("--dataset")
+        .arg(dataset_file.to_str().unwrap())
+        .arg("-N")
+        .arg("0")
+        .arg("-c")
+        .arg("2");
+
+    cmd.assert().success();
+
+    assert_eq!(mock.calls(), 3);
+}
