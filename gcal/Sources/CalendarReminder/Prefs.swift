@@ -50,6 +50,11 @@ enum Prefs {
     static var repeatSound: Bool { d.bool(forKey: "repeatSound") }
     static var includeAllCalendars: Bool { d.bool(forKey: "includeAllCalendars") }
 
+    static var pausedUntil: Date? {
+        get { d.object(forKey: "pausedUntil") as? Date }
+        set { d.set(newValue, forKey: "pausedUntil") }
+    }
+
     static var accounts: [String] {
         get { d.stringArray(forKey: "accounts") ?? [] }
         set { d.set(newValue, forKey: "accounts") }

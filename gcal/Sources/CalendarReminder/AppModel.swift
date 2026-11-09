@@ -101,8 +101,31 @@ final class AppModel: ObservableObject {
 
     // MARK: - Alerts
 
+    /// When set, alert popups are suppressed until this time.
+    var pausedUntil: Date? {
+        if let until = Prefs.pausedUntil, until > Date() { return until }
+        return nil
+    }
+
+    func pause(hours: Int) {
+        Prefs.pausedUntil = Date().addingTimeInterval(TimeInterval(hours * 3600))
+        onChange?()
+    }
+
+    func resume() {
+        Prefs.pausedUntil = nil
+        tick()
+    }
+
     func tick() {
         let now = Date()
+        if let until = Prefs.pausedUntil, until <= now {
+            Prefs.pausedUntil = nil
+        }
+        guard pausedUntil == nil else {
+            onChange?()
+            return
+        }
         let lead = TimeInterval(Prefs.leadMinutes * 60)
         for m in meetings where !fired.contains(m.key) {
             let snoozeUntil = snoozed[m.key]

@@ -39,7 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateStatusItem() {
         guard let button = statusItem?.button else { return }
         let now = Date()
-        let symbol = model.accounts.isEmpty ? "bell.slash" : (model.errors.isEmpty ? "bell" : "bell.badge")
+        let symbol = model.accounts.isEmpty || model.pausedUntil != nil
+            ? "bell.slash" : (model.errors.isEmpty ? "bell" : "bell.badge")
         button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Calendar Reminder")
         button.imagePosition = .imageLeading
 
@@ -105,6 +106,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let last = model.lastRefresh {
             menu.addItem(disabled("Updated \(Self.timeFormatter.string(from: last))"))
         }
+        if let until = model.pausedUntil {
+            menu.addItem(action("Unpause (paused until \(Self.timeFormatter.string(from: until)))", #selector(resume), ""))
+        } else {
+            let pause = NSMenuItem(title: "Pause", action: nil, keyEquivalent: "")
+            let sub = NSMenu()
+            for hours in [1, 2, 4, 8] {
+                let item = action("\(hours) hour\(hours == 1 ? "" : "s")", #selector(pause(_:)), "")
+                item.tag = hours
+                sub.addItem(item)
+            }
+            pause.submenu = sub
+            menu.addItem(pause)
+        }
         menu.addItem(action("Refresh Now", #selector(refreshNow), "r"))
         menu.addItem(action("Settings…", #selector(openSettings), ","))
         menu.addItem(.separator())
@@ -127,6 +141,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let url = sender.representedObject as? URL {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    @objc private func pause(_ sender: NSMenuItem) {
+        model.pause(hours: sender.tag)
+    }
+
+    @objc private func resume() {
+        model.resume()
     }
 
     @objc private func refreshNow() {
