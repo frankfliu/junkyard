@@ -118,9 +118,20 @@ enum CalendarAPI {
             end: end,
             account: account,
             calendar: calendar,
-            joinURL: joinURL(e),
-            eventURL: e.htmlLink.flatMap(URL.init(string:))
+            joinURL: joinURL(e).map { withAuthUser($0, account) },
+            eventURL: e.htmlLink.flatMap(URL.init(string:)).map { withAuthUser($0, account) }
         )
+    }
+
+    /// Google links open in whichever account the browser defaults to; `authuser` picks the right one.
+    private static func withAuthUser(_ url: URL, _ account: String) -> URL {
+        guard let host = url.host?.lowercased(), host == "google.com" || host.hasSuffix(".google.com"),
+              var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return url }
+        var items = (comps.queryItems ?? []).filter { $0.name != "authuser" }
+        items.append(URLQueryItem(name: "authuser", value: account))
+        comps.queryItems = items
+        return comps.url ?? url
     }
 
     private static let linkPattern = try! NSRegularExpression(
