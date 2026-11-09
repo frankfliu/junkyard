@@ -83,10 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 lastDay = day
             }
             let when = m.start <= now ? "Now" : Self.timeFormatter.string(from: m.start)
-            let item = NSMenuItem(title: "\(when)   \(m.title)", action: #selector(openMeeting(_:)), keyEquivalent: "")
+            let item = NSMenuItem(title: truncated("\(when)   \(m.title)"), action: #selector(openMeeting(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = m.joinURL ?? m.eventURL
-            item.toolTip = "\(m.calendar) · \(m.account)"
+            item.toolTip = "\(m.title)\n\(m.calendar) · \(m.account)"
             if m.joinURL != nil {
                 item.image = NSImage(systemSymbolName: "video", accessibilityDescription: "Join")
             }
@@ -96,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !model.errors.isEmpty {
             menu.addItem(.separator())
             for (account, err) in model.errors.sorted(by: { $0.key < $1.key }) {
-                let item = disabled("⚠︎ \(account.isEmpty ? "" : account + ": ")\(err)")
+                let item = disabled(truncated("⚠︎ \(account.isEmpty ? "" : account + ": ")\(err)"))
                 item.toolTip = err
                 menu.addItem(item)
             }
@@ -123,6 +123,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(action("Settings…", #selector(openSettings), ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Calendar Reminder", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+    }
+
+    private static let maxItemWidth: CGFloat = 360
+
+    /// Shortens a menu title with a trailing "…" so long titles don't make the menu huge.
+    private func truncated(_ title: String) -> String {
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.menuFont(ofSize: 0)]
+        func width(_ s: String) -> CGFloat { (s as NSString).size(withAttributes: attrs).width }
+        guard width(title) > Self.maxItemWidth else { return title }
+        var chars = Array(title)
+        while !chars.isEmpty && width(String(chars) + "…") > Self.maxItemWidth {
+            chars.removeLast()
+        }
+        return String(chars).trimmingCharacters(in: .whitespaces) + "…"
     }
 
     private func disabled(_ title: String) -> NSMenuItem {
