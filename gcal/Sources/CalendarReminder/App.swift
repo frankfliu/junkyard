@@ -67,11 +67,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
         let now = Date()
 
-        let upcoming = model.meetings.filter { $0.end > now }.prefix(15)
+        let upcoming = model.meetings.filter { $0.end > now }
         if model.accounts.isEmpty {
             menu.addItem(disabled("Open Settings to add a Google account"))
         } else if upcoming.isEmpty {
-            menu.addItem(disabled("No meetings in the next 24 hours"))
+            menu.addItem(disabled("No meetings today or tomorrow"))
         }
 
         var lastDay: String?

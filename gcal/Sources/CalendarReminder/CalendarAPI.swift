@@ -67,8 +67,8 @@ private struct Event: Decodable {
 enum CalendarAPI {
     private static let base = "https://www.googleapis.com/calendar/v3/"
 
-    /// Timed events from now through the next `hours`, across the account's calendars.
-    static func upcoming(token: String, account: String, allCalendars: Bool, hours: Double = 24) async throws -> [Meeting] {
+    /// Timed events from now through the end of tomorrow, across the account's calendars.
+    static func upcoming(token: String, account: String, allCalendars: Bool) async throws -> [Meeting] {
         let list = try await HTTP.json(CalendarList.self,
                                        HTTP.get(URL(string: base + "users/me/calendarList?minAccessRole=reader")!, token: token))
         let calendars = list.items.filter { cal in
@@ -76,13 +76,14 @@ enum CalendarAPI {
         }
 
         let now = Date()
+        let endOfTomorrow = Calendar.current.date(byAdding: .day, value: 2, to: Calendar.current.startOfDay(for: now))!
         let iso = ISO8601DateFormatter()
         var meetings: [Meeting] = []
         for cal in calendars {
             var c = URLComponents(string: base + "calendars/\(encodePath(cal.id))/events")!
             c.queryItems = [
                 URLQueryItem(name: "timeMin", value: iso.string(from: now)),
-                URLQueryItem(name: "timeMax", value: iso.string(from: now.addingTimeInterval(hours * 3600))),
+                URLQueryItem(name: "timeMax", value: iso.string(from: endOfTomorrow)),
                 URLQueryItem(name: "singleEvents", value: "true"),
                 URLQueryItem(name: "orderBy", value: "startTime"),
                 URLQueryItem(name: "maxResults", value: "250"),
