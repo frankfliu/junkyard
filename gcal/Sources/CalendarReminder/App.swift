@@ -119,6 +119,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             pause.submenu = sub
             menu.addItem(pause)
         }
+        if model.accounts.count == 1 {
+            let item = action("Open Calendar", #selector(openCalendar(_:)), "")
+            item.representedObject = model.accounts[0]
+            menu.addItem(item)
+        } else if model.accounts.count > 1 {
+            let open = NSMenuItem(title: "Open Calendar", action: nil, keyEquivalent: "")
+            let sub = NSMenu()
+            for email in model.accounts {
+                let item = action(email, #selector(openCalendar(_:)), "")
+                item.representedObject = email
+                sub.addItem(item)
+            }
+            open.submenu = sub
+            menu.addItem(open)
+        }
         menu.addItem(action("Refresh Now", #selector(refreshNow), "r"))
         menu.addItem(action("Settings…", #selector(openSettings), ","))
         menu.addItem(.separator())
@@ -159,6 +174,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else if let url = m.eventURL {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    @objc private func openCalendar(_ sender: NSMenuItem) {
+        guard let email = sender.representedObject as? String else { return }
+        NSWorkspace.shared.open(CalendarAPI.webURL(account: email))
     }
 
     @objc private func pause(_ sender: NSMenuItem) {

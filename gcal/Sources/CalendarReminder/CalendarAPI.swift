@@ -124,6 +124,11 @@ enum CalendarAPI {
         )
     }
 
+    /// The Google Calendar web UI, signed in as `account`.
+    static func webURL(account: String) -> URL {
+        withAuthUser(URL(string: "https://calendar.google.com/calendar/r")!, account)
+    }
+
     /// Google links open in whichever account the browser defaults to; `authuser` picks the right one.
     private static func withAuthUser(_ url: URL, _ account: String) -> URL {
         guard let host = url.host?.lowercased(), host == "google.com" || host.hasSuffix(".google.com"),
