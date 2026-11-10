@@ -103,9 +103,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
-        if let last = model.lastRefresh {
-            menu.addItem(disabled("Updated \(Self.timeFormatter.string(from: last))"))
-        }
         if let until = model.pausedUntil {
             menu.addItem(action("Unpause (paused until \(Self.timeFormatter.string(from: until)))", #selector(resume), ""))
         } else {
@@ -134,7 +131,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             open.submenu = sub
             menu.addItem(open)
         }
-        menu.addItem(action("Refresh Now", #selector(refreshNow), "r"))
+        let refresh = model.lastRefresh.map { "Refresh Now (updated \(Self.timeFormatter.string(from: $0)))" } ?? "Refresh Now"
+        menu.addItem(action(refresh, #selector(refreshNow), "r"))
         menu.addItem(action("Settings…", #selector(openSettings), ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Calendar Reminder", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
