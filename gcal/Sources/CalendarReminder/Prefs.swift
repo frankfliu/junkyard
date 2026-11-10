@@ -55,6 +55,18 @@ enum Prefs {
         set { d.set(newValue, forKey: "pausedUntil") }
     }
 
+    /// Meetings already alerted (key → meeting end), so a restart doesn't pop them up again.
+    static var firedAlerts: [String: Date] {
+        get { d.dictionary(forKey: "firedAlerts") as? [String: Date] ?? [:] }
+        set { d.set(newValue, forKey: "firedAlerts") }
+    }
+
+    /// Snoozed meetings (key → time to alert again).
+    static var snoozedAlerts: [String: Date] {
+        get { d.dictionary(forKey: "snoozedAlerts") as? [String: Date] ?? [:] }
+        set { d.set(newValue, forKey: "snoozedAlerts") }
+    }
+
     static var accounts: [String] {
         get { d.stringArray(forKey: "accounts") ?? [] }
         set { d.set(newValue, forKey: "accounts") }

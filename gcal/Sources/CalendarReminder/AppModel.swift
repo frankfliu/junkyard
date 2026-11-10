@@ -20,8 +20,13 @@ final class AppModel: ObservableObject {
 
     private let alerts = AlertController()
     private var tokens: [String: (token: String, expiry: Date)] = [:]
-    private var fired: Set<String> = []
-    private var snoozed: [String: Date] = [:]
+    // Persisted so restarting the app doesn't re-alert meetings already handled.
+    private var fired = Prefs.firedAlerts.filter { $0.value > Date() } {
+        didSet { Prefs.firedAlerts = fired.filter { $0.value > Date() } }
+    }
+    private var snoozed = Prefs.snoozedAlerts.filter { $0.value > Date().addingTimeInterval(-86400) } {
+        didSet { Prefs.snoozedAlerts = snoozed }
+    }
     private var refreshing = false
     private var timers: [Timer] = []
 
@@ -127,12 +132,12 @@ final class AppModel: ObservableObject {
             return
         }
         let lead = TimeInterval(Prefs.leadMinutes * 60)
-        for m in meetings where !fired.contains(m.key) {
+        for m in meetings where fired[m.key] == nil {
             let snoozeUntil = snoozed[m.key]
             let alertAt = snoozeUntil ?? m.start.addingTimeInterval(-lead)
             let deadline = snoozeUntil != nil ? m.end : m.start.addingTimeInterval(Self.lateGrace)
             if now >= alertAt && now < deadline {
-                fired.insert(m.key)
+                fired[m.key] = m.end
                 snoozed[m.key] = nil
                 alerts.show(m) { [weak self] until in self?.snooze(m, until: until) }
             }
@@ -141,7 +146,7 @@ final class AppModel: ObservableObject {
     }
 
     private func snooze(_ m: Meeting, until: Date) {
-        fired.remove(m.key)
+        fired[m.key] = nil
         snoozed[m.key] = until
     }
 

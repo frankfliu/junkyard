@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 
 /// Shows a floating window per meeting and plays the alert sound while any are open.
@@ -15,6 +16,7 @@ final class AlertController: NSObject, NSWindowDelegate {
     private static let soundRepeatInterval: TimeInterval = 3
     private static let soundMaxDuration: TimeInterval = 60
     private static let silentAutoDismiss: TimeInterval = 5 * 60
+    private static let log = Logger(subsystem: "CalendarReminder", category: "alert")
 
     func show(_ meeting: Meeting, onSnooze: @escaping (Date) -> Void) {
         guard windows[meeting.key] == nil else { return }
@@ -107,8 +109,17 @@ final class AlertController: NSObject, NSWindowDelegate {
     }
 
     private func playOnce() {
+        guard Prefs.soundName != "None" else { return }
         // Don't ring while already on a call (joined this meeting, or the previous one ran over).
-        guard Prefs.soundName != "None", Date() >= inMeetingUntil, !Microphone.inUse else { return }
+        if Date() < inMeetingUntil {
+            Self.log.notice("Sound skipped: joined a meeting that ends at \(self.inMeetingUntil, privacy: .public)")
+            return
+        }
+        let micUsers = Microphone.users
+        if !micUsers.isEmpty {
+            Self.log.notice("Sound skipped: microphone in use by \(micUsers.joined(separator: ", "), privacy: .public)")
+            return
+        }
         NSSound(named: NSSound.Name(Prefs.soundName))?.play()
     }
 }
