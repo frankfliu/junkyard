@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let when = m.start <= now ? "Now" : Self.timeFormatter.string(from: m.start)
             let item = NSMenuItem(title: truncated("\(when)   \(m.title)"), action: #selector(openMeeting(_:)), keyEquivalent: "")
             item.target = self
-            item.representedObject = m.joinURL ?? m.eventURL
+            item.representedObject = m
             item.toolTip = "\(m.title)\n\(m.calendar) · \(m.account)"
             if m.joinURL != nil {
                 item.image = NSImage(systemSymbolName: "video", accessibilityDescription: "Join")
@@ -152,7 +152,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func openMeeting(_ sender: NSMenuItem) {
-        if let url = sender.representedObject as? URL {
+        guard let m = sender.representedObject as? Meeting else { return }
+        if let url = m.joinURL {
+            NSWorkspace.shared.open(url)
+            model.joined(m)
+        } else if let url = m.eventURL {
             NSWorkspace.shared.open(url)
         }
     }

@@ -9,6 +9,8 @@ final class AlertController: NSObject, NSWindowDelegate {
     private var ringing: Set<String> = []
     private var soundTimer: Timer?
     private var soundStarted = Date.distantPast
+    /// End of the latest meeting joined through this app; stay quiet until then.
+    private var inMeetingUntil = Date.distantPast
 
     private static let soundRepeatInterval: TimeInterval = 3
     private static let soundMaxDuration: TimeInterval = 60
@@ -21,6 +23,11 @@ final class AlertController: NSObject, NSWindowDelegate {
         let view = AlertView(
             meeting: meeting,
             join: { [weak self] url in
+                NSWorkspace.shared.open(url)
+                self?.joined(meeting)
+                self?.close(key)
+            },
+            openEvent: { [weak self] url in
                 NSWorkspace.shared.open(url)
                 self?.close(key)
             },
@@ -60,6 +67,12 @@ final class AlertController: NSObject, NSWindowDelegate {
         }
     }
 
+    /// Records that the user joined `meeting`, silencing alerts until it's scheduled to end.
+    func joined(_ meeting: Meeting) {
+        inMeetingUntil = max(inMeetingUntil, meeting.end)
+        stopSound()
+    }
+
     private func close(_ key: String) {
         windows[key]?.close()
     }
@@ -94,7 +107,8 @@ final class AlertController: NSObject, NSWindowDelegate {
     }
 
     private func playOnce() {
-        guard Prefs.soundName != "None" else { return }
+        // Don't ring while already on a call (joined this meeting, or the previous one ran over).
+        guard Prefs.soundName != "None", Date() >= inMeetingUntil, !Microphone.inUse else { return }
         NSSound(named: NSSound.Name(Prefs.soundName))?.play()
     }
 }
@@ -102,6 +116,7 @@ final class AlertController: NSObject, NSWindowDelegate {
 private struct AlertView: View {
     let meeting: Meeting
     let join: (URL) -> Void
+    let openEvent: (URL) -> Void
     let snooze: (Date) -> Void
     let dismiss: () -> Void
 
@@ -134,7 +149,7 @@ private struct AlertView: View {
                         .keyboardShortcut(.defaultAction)
                 }
                 if let url = meeting.eventURL {
-                    Button("Open Event") { join(url) }
+                    Button("Open Event") { openEvent(url) }
                 }
                 Spacer()
                 Menu("Snooze") {

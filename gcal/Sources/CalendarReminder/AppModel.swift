@@ -145,6 +145,10 @@ final class AppModel: ObservableObject {
         snoozed[m.key] = until
     }
 
+    func joined(_ m: Meeting) {
+        alerts.joined(m)
+    }
+
     func testAlert() {
         let start = Date().addingTimeInterval(TimeInterval(Prefs.leadMinutes * 60))
         let m = Meeting(id: "test-\(UUID())", title: "Test meeting", start: start,
