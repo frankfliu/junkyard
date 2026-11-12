@@ -11,6 +11,16 @@ use aws_sdk_bedrock::primitives::Blob;
 #[cfg(feature = "bedrock")]
 use aws_sdk_bedrockruntime::Client as BedrockClient;
 
+pub struct Response {
+    pub body: String,
+    pub headers: HeaderMap,
+    pub duration: Duration,
+    /// time to first byte
+    pub ttfb: Duration,
+    /// (cumulative body length, arrival time) of each received chunk
+    pub chunks: Vec<(usize, Duration)>,
+}
+
 #[derive(Clone)]
 pub enum ClientWrapper {
     Default(Client),
@@ -52,7 +62,7 @@ impl ClientWrapper {
         cli: &Args,
         record: &Record,
         print_to_console: bool,
-    ) -> Result<(String, HeaderMap, Duration, Duration), anyhow::Error> {
+    ) -> Result<Response, anyhow::Error> {
         match self {
             ClientWrapper::Default(client) => {
                 Self::send_request_default(client, cli, record, print_to_console).await
@@ -89,12 +99,13 @@ impl ClientWrapper {
                     reqwest::header::CONTENT_TYPE,
                     "application/octet-json".parse()?,
                 );
-                Ok((
-                    String::from_utf8(body_bytes)?,
+                Ok(Response {
+                    body: String::from_utf8(body_bytes)?,
                     headers,
-                    start.elapsed(),
-                    ttft,
-                ))
+                    duration: start.elapsed(),
+                    ttfb: ttft,
+                    chunks: Vec::new(),
+                })
             }
         }
     }
@@ -104,7 +115,7 @@ impl ClientWrapper {
         cli: &Args,
         record: &Record,
         print_to_console: bool,
-    ) -> Result<(String, HeaderMap, Duration, Duration), anyhow::Error> {
+    ) -> Result<Response, anyhow::Error> {
         let request_builder = record.clone().into_request_builder(client);
         tracing::trace!({
            request = record.body,
@@ -142,27 +153,31 @@ impl ClientWrapper {
         let mut stream = res.bytes_stream();
         let mut body_bytes = Vec::new();
 
+        let mut chunks = Vec::new();
         let mut first_chunk = true;
         while let Some(item) = stream.next().await {
             let chunk = item?;
+            let elapsed = start.elapsed();
             if print_to_console {
                 print!("{}", String::from_utf8_lossy(&chunk));
             }
             if first_chunk {
-                ttft = start.elapsed();
+                ttft = elapsed;
                 first_chunk = false;
             }
             body_bytes.extend_from_slice(&chunk);
+            chunks.push((body_bytes.len(), elapsed));
         }
         if print_to_console {
             println!();
         }
-        Ok((
-            String::from_utf8(body_bytes)?,
+        Ok(Response {
+            body: String::from_utf8(body_bytes)?,
             headers,
-            start.elapsed(),
-            ttft,
-        ))
+            duration: start.elapsed(),
+            ttfb: ttft,
+            chunks,
+        })
     }
 
     #[cfg(not(feature = "bedrock"))]
@@ -171,7 +186,7 @@ impl ClientWrapper {
         cli: &Args,
         record: &Record,
         print_to_console: bool,
-    ) -> Result<(String, HeaderMap, Duration, Duration), anyhow::Error> {
+    ) -> Result<Response, anyhow::Error> {
         match self {
             ClientWrapper::Default(client) => {
                 Self::send_request_default(client, cli, record, print_to_console).await

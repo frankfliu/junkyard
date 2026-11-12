@@ -89,9 +89,17 @@ pub struct Args {
     )]
     pub output_jq: Option<String>,
 
+    /// Minimum output tokens for a request to count towards OTPS/TPOT
+    #[arg(long, value_name = "TOKENS", default_value_t = 32)]
+    pub(crate) min_output_tokens: usize,
+
     /// model ID
     #[arg(short, long)]
     pub model_id: Option<String>,
+
+    /// Per request OTPS floor, reported as otps_below_floor_ratio
+    #[arg(long, value_name = "OTPS", default_value_t = 35.)]
+    pub(crate) otps_floor: f64,
 
     /// Number of requests to perform (0 = run each dataset record once)
     #[arg(short = 'N', long, default_value_t = 1)]
@@ -165,7 +173,8 @@ impl Args {
             }
             Some("openai") => {
                 if stream {
-                    ".choices[] | .delta.content".to_string()
+                    // reasoning tokens count as output tokens
+                    r#".choices[] | (.delta.reasoning_content // .delta.reasoning // "") + (.delta.content // "")"#.to_string()
                 } else {
                     ".choices[] | .message.content".to_string()
                 }
@@ -201,8 +210,23 @@ impl Args {
     pub(crate) fn get_jq_for_input_tokens(&self) -> Option<String> {
         match self.server.as_deref() {
             Some("gemini") => Some(".usageMetadata.promptTokenCount".to_string()),
-            Some("anthropic") => Some(".usage.input_tokens".to_string()),
+            // anthropic input_tokens excludes cached tokens
+            Some("anthropic") => Some(
+                "(.usage // .message.usage) | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)"
+                    .to_string(),
+            ),
             Some("openai") => Some(".usage.prompt_tokens".to_string()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn get_jq_for_cached_tokens(&self) -> Option<String> {
+        match self.server.as_deref() {
+            Some("gemini") => Some(".usageMetadata.cachedContentTokenCount".to_string()),
+            Some("anthropic") => {
+                Some("(.usage // .message.usage).cache_read_input_tokens".to_string())
+            }
+            Some("openai") => Some(".usage.prompt_tokens_details.cached_tokens".to_string()),
             _ => None,
         }
     }
@@ -210,7 +234,7 @@ impl Args {
     pub(crate) fn get_jq_for_output_tokens(&self) -> Option<String> {
         match self.server.as_deref() {
             Some("gemini") => Some(".usageMetadata.candidatesTokenCount".to_string()),
-            Some("anthropic") => Some(".usage.input_tokens".to_string()),
+            Some("anthropic") => Some(".usage.output_tokens".to_string()),
             Some("openai") => Some(".usage.completion_tokens".to_string()),
             _ => None,
         }
@@ -289,7 +313,10 @@ mod tests {
 
         // Test openai
         args.server = Some("openai".to_string());
-        assert_eq!(args.get_jq_for_text(true), ".choices[] | .delta.content");
+        assert_eq!(
+            args.get_jq_for_text(true),
+            r#".choices[] | (.delta.reasoning_content // .delta.reasoning // "") + (.delta.content // "")"#
+        );
         assert_eq!(args.get_jq_for_text(false), ".choices[] | .message.content");
 
         // Test anthropic
@@ -332,9 +359,10 @@ mod tests {
 
         // Test anthropic
         args.server = Some("anthropic".to_string());
-        assert_eq!(
-            args.get_jq_for_input_tokens(),
-            Some(".usage.input_tokens".to_string())
+        assert!(
+            args.get_jq_for_input_tokens()
+                .unwrap()
+                .contains("cache_read_input_tokens")
         );
     }
 
@@ -363,7 +391,7 @@ mod tests {
         args.server = Some("anthropic".to_string());
         assert_eq!(
             args.get_jq_for_output_tokens(),
-            Some(".usage.input_tokens".to_string())
+            Some(".usage.output_tokens".to_string())
         );
 
         // Test custom expression
